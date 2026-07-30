@@ -1,84 +1,115 @@
 # anti-slop-kit
 
-Controlled-language writing skills and deterministic linters that remove AI slop from technical prose.
+Controlled-language writing skills and deterministic linters that remove AI slop
+from technical prose. Two languages: English (ASD-STE100 mechanics) and Russian
+(GOST R 58049-2017, clause 8.2.3).
 
-Two tracks:
+A skill tells the model how to write. A linter proves whether the model did it.
+The linter is the part most anti-slop advice leaves out.
 
-| Track | Basis | Skill | Linter |
-| --- | --- | --- | --- |
-| English | ASD-STE100 (Simplified Technical English) | `en/SKILL.md` | `en/ste-lint.py` |
-| Russian | GOST R 58049-2017 section 8.2.3 (UTR) | `ru/SKILL.md` | `ru/ru-ste-lint.py` |
+## What is in here
 
-## Why
+```
+en/SKILL.md              ste-writing skill, English
+en/ste-lint.py           English linter, 11 rule groups
+en/samples/              one slop text and one clean rewrite
+ru/SKILL.md              utrya-writing skill, Russian
+ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
+ru/samples/              one slop text and one clean rewrite
+tests/test_linters.py    35 tests, standard library only
+hooks/pre-commit         git hook that blocks a commit above the limit
+.pre-commit-config.example.yaml
+RESULTS.md               measured scores and their limits
+```
 
-AI writing assistants produce prose that is grammatical and empty. Ban-word lists do not fix this, because the problem is structure, not vocabulary.
+## Quick start
 
-Controlled natural languages solve the same problem for aircraft maintenance manuals since 1986. ASD-STE100 constrains vocabulary, sentence length, voice, and paragraph structure. The Russian standard GOST R 58049-2017 does the same for Russian technical documentation.
+```sh
+git clone https://github.com/Username-ame/anti-slop-kit
+cd anti-slop-kit
 
-This repository ports both into agent skills, and adds a linter so the result is a number, not an opinion.
+python3 en/ste-lint.py en/samples/baseline.md en/samples/ste.md
+python3 ru/ru-ste-lint.py ru/samples/baseline.md ru/samples/utr.md
+
+python3 -m unittest discover -s tests
+```
+
+No dependencies. Python 3.9 or later. The linters use the standard library only,
+because a skill directory is copied as a unit and must keep working after the copy.
 
 ## Score
 
-Both linters report violations per 100 words. Lower is cleaner.
+The score is violations per 100 words. Lower is cleaner.
 
-The useful signal is the delta between a draft and a rewrite, not the absolute value.
+| Text | Score | Longest sentence |
+| --- | --- | --- |
+| `en/samples/baseline.md` | 31.85 | 49 words |
+| `en/samples/ste.md` | 0.83 | 14 words |
+| `ru/samples/baseline.md` | 39.32 | 27 words |
+| `ru/samples/utr.md` | 0.00 | 11 words |
 
-### Russian, measured
+Read `RESULTS.md` before you quote these numbers. Two texts per language is a
+smoke test, not a benchmark.
 
-```
-sample-baseline.md   words=117  total=46  per100w=39.32  maxsent=27
-sample-utr.md        words= 94  total= 0  per100w= 0.00  maxsent=11
-```
+## Use it in a pipeline
 
-Top categories in the baseline: verbal nouns 10.26, participles 7.69, bureaucratese 6.84 per 100 words.
+The linters return exit code 1 when a file scores above the limit, so they can
+gate a build:
 
-Two texts is a smoke test, not a benchmark. A full run is open work.
-
-## Install
-
-```bash
-# Claude Code
-mkdir -p ~/.claude/skills/utrya-writing
-cp ru/SKILL.md ru/ru-ste-lint.py ~/.claude/skills/utrya-writing/
-
-mkdir -p ~/.claude/skills/ste-writing
-cp en/SKILL.md en/ste-lint.py ~/.claude/skills/ste-writing/
+```sh
+python3 en/ste-lint.py --max 5 docs/*.md
+python3 ru/ru-ste-lint.py --max 5 --json README.ru.md
 ```
 
-Copilot CLI uses `~/.copilot/skills/`. Amp and cross-agent hosts use `~/.agents/skills/`.
+Exit codes:
 
-## Run the linter
+- `0`: every file is at or below the limit, or no limit was given
+- `1`: at least one file is above the limit
+- `2`: bad option or unreadable file
 
-```bash
-python3 ru/ru-ste-lint.py draft.md
-python3 ru/ru-ste-lint.py --json draft.md
-cat draft.md | python3 ru/ru-ste-lint.py
+Git hook:
+
+```sh
+ln -s ../../hooks/pre-commit .git/hooks/pre-commit
+chmod +x hooks/pre-commit
+ANTI_SLOP_MAX=3 git commit          # change the limit for one commit
+git commit --no-verify              # skip the hook
 ```
 
-Python 3, standard library only. No dependencies.
+For [pre-commit](https://pre-commit.com), copy `.pre-commit-config.example.yaml`
+and adjust the two paths.
 
-## Scope
+## Exclude a region
 
-Apply to documentation, README files, pull request descriptions, error messages, release notes, and comments.
+The linters skip frontmatter, code blocks, inline code, link targets, bare URLs
+and HTML comments. To exclude prose as well:
 
-Do not apply to code, variable names, or command syntax.
+```markdown
+<!-- anti-slop: off -->
+A quoted paragraph that you must not rewrite.
+<!-- anti-slop: on -->
+```
 
-Do not apply to marketing copy, essays, or fiction. Controlled language removes voice on purpose.
+## What the score does not tell you
 
-## Limits
+The linters match patterns. They do not read.
 
-- The linters are heuristic. They match surface patterns and produce false positives.
-- They check form. They cannot tell you whether a paragraph is true or worth writing.
-- Russian morphology is harder than English. The participle and nominalization patterns over-match some legitimate technical nouns.
+- A score of 0 says nothing about whether the text is correct or complete.
+- Every rule can produce a false positive. Passive voice is right when the actor
+  is unknown. Some long sentences are clear.
+- Use the score to find candidates for a rewrite, not to grade a writer.
 
-## Prior art
+## Sources
 
-- ASD-STE100, Issue 9, 15 January 2025. Owned by ASD (Brussels) and maintained by STEMG. Free copy on request from asd-ste100.org. The specification text is copyrighted and is not reproduced here.
-- GOST R 58049-2017, section 8.2.3. Introduces UTR, simplified technical Russian.
-- GOST 2.105, clause 4.2. Prefer a Russian word when an equivalent exists.
-- Glavred and the infostyle school (Ilyahov, Nora Gal) for Russian editing heuristics.
-- `talkstream/ru-text`. A broader Russian style plugin, roughly 1044 rules across typography, UX copy, and business writing. Complementary, not a competitor: it gives breadth, this gives a deterministic number for CI.
-- `woosal1337/blog`, episode 01, for the original English experiment that showed a controlled-language skill beats ban-word lists.
+- ASD-STE100 Simplified Technical English, Issue 9 (15 January 2025), ASD and the
+  STEMG: https://asd-ste100.org. The specification is copyrighted. This repository
+  reproduces the mechanics and no part of the text. Request a free copy from ASD.
+- GOST R 58049-2017, clause 8.2.3, controlled Russian technical language.
+- The English skill follows the approach shown in
+  https://github.com/woosal1337/blog/tree/main/videos/ep01-the-cure-for-ai-slop.
+  The skill and the linter here are written from scratch and share no code with it.
+- https://github.com/talkstream/ru-text is a larger Russian rule set (about 1044
+  rules) and works well next to this kit.
 
 ## License
 
