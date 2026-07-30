@@ -1,0 +1,45 @@
+#!/bin/sh
+# anti-slop-kit pre-commit hook.
+#
+# Install:
+#   ln -s ../../hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x hooks/pre-commit
+#
+# Change the limit:
+#   ANTI_SLOP_MAX=3 git commit
+#
+# Skip the hook once:
+#   git commit --no-verify
+#
+# The hook picks the linter by path: files under ru/ and files named *.ru.md
+# go to the Russian linter, everything else goes to the English one. Change
+# the case block below if your repository uses a different layout.
+
+MAX="${ANTI_SLOP_MAX:-5}"
+ROOT=$(git rev-parse --show-toplevel)
+STAGED=$(git diff --cached --name-only --diff-filter=ACM -- '*.md')
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+status=0
+for f in $STAGED; do
+  case "$f" in
+    ru/*|*.ru.md) linter="$ROOT/ru/ru-ste-lint.py" ;;
+    *)            linter="$ROOT/en/ste-lint.py" ;;
+  esac
+  if [ ! -f "$linter" ]; then
+    echo "anti-slop: linter not found at $linter"
+    exit 2
+  fi
+  python3 "$linter" --max "$MAX" "$ROOT/$f" || status=1
+done
+
+if [ "$status" -ne 0 ]; then
+  echo ""
+  echo "anti-slop: commit blocked. Edit the text, raise ANTI_SLOP_MAX,"
+  echo "or commit with --no-verify if the score is wrong here."
+fi
+
+exit $status

@@ -1,0 +1,28 @@
+# Example configuration for https://pre-commit.com
+#
+# Copy this file to .pre-commit-config.yaml inside the repository you write in,
+# adjust the paths to the two linters, then run:
+#   pre-commit install
+#
+# The hooks are declared as repo-local on purpose. The linters are plain
+# standard-library scripts with no package on PyPI, so a local entry is honest
+# about what actually runs.
+
+repos:
+  - repo: local
+    hooks:
+      - id: anti-slop-en
+        name: anti-slop (English)
+        description: Score English prose against ASD-STE100 mechanics.
+        entry: python3 en/ste-lint.py --max 5
+        language: system
+        types: [markdown]
+        exclude: '^ru/'
+
+      - id: anti-slop-ru
+        name: anti-slop (Russian)
+        description: Score Russian prose against GOST R 58049 clause 8.2.3.
+        entry: python3 ru/ru-ste-lint.py --max 5
+        language: system
+        types: [markdown]
+        files: '^ru/.*\.md$'

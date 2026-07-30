@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: tests (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run the linter test suite
+        run: python -m unittest discover -s tests -v
+
+  self-lint:
+    name: the clean samples must stay clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Lint the English sample
+        run: python en/ste-lint.py --max 2 en/samples/ste.md
+      - name: Lint the Russian sample
+        run: python ru/ru-ste-lint.py --max 2 ru/samples/utr.md
+      - name: Print the baseline scores for the log
+        run: |
+          python en/ste-lint.py en/samples/baseline.md
+          python ru/ru-ste-lint.py ru/samples/baseline.md
