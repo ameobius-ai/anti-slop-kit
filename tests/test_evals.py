@@ -30,7 +30,13 @@ SLOP = (
     "game-changing capability that unlocks value.\n"
 )
 
-CLEAN = "Set the timeout to 30 seconds. The server closes idle connections.\n"
+# The score is violations per 100 words, so a short fixture is unstable: one
+# match in eleven words reads as 9.09. Keep the clean fixture above 30 words.
+CLEAN = (
+    "Set the timeout to 30 seconds. The server closes idle links after that "
+    "time. Use the flag --retry to try again. Each retry waits two seconds "
+    "longer than the one before it. Read the log file to find the last error.\n"
+)
 
 
 class Naming(unittest.TestCase):
