@@ -10,13 +10,16 @@ The linter is the part most anti-slop advice leaves out.
 ## What is in here
 
 ```
+AGENTS.md                instructions for an agent working in this repository
 en/SKILL.md              ste-writing skill, English
 en/ste-lint.py           English linter, 11 rule groups
 en/samples/              one slop text and one clean rewrite
 ru/SKILL.md              utrya-writing skill, Russian
 ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
 ru/samples/              one slop text and one clean rewrite
-tests/test_linters.py    35 tests, standard library only
+harness/SKILL.md         separate skill: how to design an agent harness
+evals/                   eval harness: 12 tasks, 4 conditions, scorer, runner
+tests/                   43 tests, standard library only
 hooks/pre-commit         git hook that blocks a commit above the limit
 .pre-commit-config.example.yaml
 RESULTS.md               measured scores and their limits
@@ -49,7 +52,9 @@ The score is violations per 100 words. Lower is cleaner.
 | `ru/samples/utr.md` | 0.00 | 11 words |
 
 Read `RESULTS.md` before you quote these numbers. Two texts per language is a
-smoke test, not a benchmark.
+smoke test, not a benchmark. `evals/` holds the harness for a real measurement
+across six tasks per language and four prompt conditions. It has not been run
+yet, and no number on this page comes from it.
 
 ## Use it in a pipeline
 
@@ -110,6 +115,9 @@ The linters match patterns. They do not read.
   The skill and the linter here are written from scratch and share no code with it.
 - https://github.com/talkstream/ru-text is a larger Russian rule set (about 1044
   rules) and works well next to this kit.
+- `harness/SKILL.md` is built from
+  https://github.com/ai-boost/awesome-harness-engineering (CC0) and the sources it
+  lists.
 
 ## License
 
