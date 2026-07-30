@@ -4,12 +4,26 @@
 ru-ste-lint - anti-slop linter for Russian technical prose.
 
 Score = violations per 100 words (lower is cleaner).
-Basis: GOST R 58049-2017 (8.2.3 UTR) mechanics + Russian AI-slop markers.
+Basis: GOST R 58049-2017 clause 8.2.3 (UTR) mechanics + Russian AI-slop markers.
 
 Usage:
     python3 ru-ste-lint.py draft.md [more.md ...]
+    python3 ru-ste-lint.py --max 5 docs/*.md   # exit 1 if a file scores above 5
     cat draft.md | python3 ru-ste-lint.py
     python3 ru-ste-lint.py --json draft.md
+
+Exit codes:
+    0 - every file is at or below the threshold (or no threshold was given)
+    1 - at least one file is above the threshold
+    2 - bad arguments or unreadable file
+
+To exclude a region from the score, wrap it:
+    <!-- anti-slop: off -->
+    ... text the linter must ignore ...
+    <!-- anti-slop: on -->
+
+This file is standalone on purpose. A skill directory is copied as a unit,
+so the linter must not import anything outside the standard library.
 """
 import re, sys, json, glob, os
 
@@ -67,14 +81,14 @@ NOMINAL_RE = re.compile(
     r"\b[а-яё]{3,}(?:ание|ения|ение|аний|ений|ация|ации|аций|ирование|"
     r"ирования|ированию|изация|изации)\b", re.I)
 
-# participles: -ущий/-ющий/-ащий/-ящий/-вший/-ший/-нный/-емый/-имый/-тый
+# participles: -ущий/-ющий/-ащий/-ящий/-вший/-нный/-емый/-имый
 PARTICIPLE_RE = re.compile(
     r"\b[а-яё]{3,}(?:ующ|ирующ|ующи|ющий|ющая|ющее|ющие|ющих|ющим|ющего|"
     r"ащий|ящий|ящая|ящие|ящих|вший|вшая|вшие|вших|вшего|"
     r"нный|нная|нное|нные|нных|нным|нного|емый|емая|емые|емых|имый|имая|имые)\b",
     re.I)
 
-# gerunds: -ая/-яя (deeprichastie) is ambiguous; use safer -в/-вши/-ав/-ив forms
+# gerunds
 GERUND_RE = re.compile(
     r"\b[а-яё]{3,}(?:ывая|ивая|уя|юя|авши|ивши|вшись|ясь|аясь|уясь)\b", re.I)
 
@@ -91,14 +105,37 @@ GEN_NOUN_RE = re.compile(
     r"[а-яё]{4,}(?:ия|ии|ов|ей|ам|ах|ями|ости|ения|ания)\s+"
     r"[а-яё]{4,}(?:ия|ии|ов|ей|ам|ах|ями|ости|ения|ания)\b", re.I)
 
+# --- markup that must not be scored -------------------------------------------
 
-def strip_code(t: str) -> str:
-    t = re.sub(r"```.*?```", " ", t, flags=re.S)
-    t = re.sub(r"`[^`]*`", " ", t)
+FRONTMATTER_RE = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.S)
+IGNORE_RE = re.compile(
+    r"<!--\s*anti-slop:\s*off\s*-->.*?<!--\s*anti-slop:\s*on\s*-->", re.S | re.I)
+FENCE_RE = re.compile(r"```.*?```", re.S)
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
+MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+BARE_URL_RE = re.compile(r"https?://\S+")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+
+
+def preprocess(text):
+    """Remove everything that is markup, not prose.
+
+    Frontmatter, ignored regions, code, image and link targets, bare URLs,
+    and HTML comments are not prose, so scoring them adds noise.
+    """
+    t = FRONTMATTER_RE.sub("", text)
+    t = IGNORE_RE.sub(" ", t)
+    t = FENCE_RE.sub(" ", t)
+    t = INLINE_CODE_RE.sub(" ", t)
+    t = MD_IMAGE_RE.sub(" ", t)
+    t = MD_LINK_RE.sub(r"\1", t)
+    t = BARE_URL_RE.sub(" ", t)
+    t = HTML_COMMENT_RE.sub(" ", t)
     return t
 
 
-def sentences(text: str):
+def sentences(text):
     out = []
     for line in text.split("\n"):
         s = line.strip()
@@ -115,11 +152,11 @@ def sentences(text: str):
     return out
 
 
-def wc(s: str) -> int:
+def wc(s):
     return len(WORD_RE.findall(s))
 
 
-def count_phrases(text: str, phrases):
+def count_phrases(text, phrases):
     low = text.lower().replace("ё", "е")
     n, hits = 0, []
     for ph in phrases:
@@ -130,15 +167,13 @@ def count_phrases(text: str, phrases):
     return n, hits
 
 
-def lint(text: str) -> dict:
-    raw = text
-    text = strip_code(text)
+def lint(text):
+    text = preprocess(text)
     sents = sentences(text)
     words = sum(wc(s) for s in sents) or 1
 
     v = {}
-    longs = [(wc(s), s) for s in sents if wc(s) > 20]
-    v["long_sentence(>20w)"] = len(longs)
+    v["long_sentence(>20w)"] = sum(1 for s in sents if wc(s) > 20)
     v["semicolon"] = text.count(";")
     v["passive_reflexive"] = len(PASSIVE_RE.findall(text))
     v["passive_short"] = len(SHORT_PASSIVE_RE.findall(text))
@@ -151,15 +186,14 @@ def lint(text: str) -> dict:
     v["ai_slop"], ah = count_phrases(text, AI_SLOP)
     v["hedge"], _ = count_phrases(text, HEDGE)
 
-    paras = [p for p in re.split(r"\n\s*\n", raw) if p.strip()]
-    v["long_paragraph(>6s)"] = sum(
-        1 for p in paras if len(sentences(strip_code(p))) > 6)
+    paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
+    v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
 
     total = sum(v.values())
     typo = {
-        "straight_quotes": raw.count('"'),
-        "hyphen_as_dash": len(re.findall(r"\s-\s", raw)),
-        "em_dash": raw.count("—"),
+        "straight_quotes": text.count('"'),
+        "hyphen_as_dash": len(re.findall(r"\s-\s", text)),
+        "em_dash": text.count("—"),
     }
     return {
         "words": words,
@@ -176,26 +210,64 @@ def lint(text: str) -> dict:
     }
 
 
-def main():
-    args = [a for a in sys.argv[1:]]
-    as_json = "--json" in args
-    files = [a for a in args if not a.startswith("--")]
+def report(name, r, as_json, max_score):
+    if as_json:
+        print(json.dumps({name: r}, ensure_ascii=False, indent=2))
+    else:
+        print(f"{os.path.basename(name):28} words={r['words']:5d} "
+              f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
+              f"maxsent={r['longest_sentence_words']:3d}")
+    if max_score is not None and r["total_per100w"] > max_score:
+        print(f"FAIL {name}: {r['total_per100w']:.2f} per 100 words "
+              f"is above the limit of {max_score:.2f}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def run(files, as_json=False, max_score=None):
     if not files:
-        print(json.dumps(lint(sys.stdin.read()), ensure_ascii=False, indent=2))
-        return
+        return report("<stdin>", lint(sys.stdin.read()), True, max_score)
     expanded = []
     for f in files:
         expanded += sorted(glob.glob(f)) if any(c in f for c in "*?[") else [f]
+    failed = 0
     for f in expanded:
-        with open(f, encoding="utf-8") as fh:
-            r = lint(fh.read())
-        if as_json:
-            print(json.dumps({f: r}, ensure_ascii=False, indent=2))
+        try:
+            with open(f, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError as exc:
+            print(f"ERROR {f}: {exc}", file=sys.stderr)
+            return 2
+        failed += report(f, lint(text), as_json, max_score)
+    return 1 if failed else 0
+
+
+def main(argv):
+    as_json, max_score, files = False, None, []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--json":
+            as_json = True
+        elif a == "--max":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --max needs a number", file=sys.stderr)
+                return 2
+            max_score = float(argv[i])
+        elif a.startswith("--max="):
+            max_score = float(a.split("=", 1)[1])
+        elif a in ("-h", "--help"):
+            print(__doc__)
+            return 0
+        elif a.startswith("--"):
+            print(f"ERROR: unknown option {a}", file=sys.stderr)
+            return 2
         else:
-            print(f"{os.path.basename(f):28} words={r['words']:5d} "
-                  f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
-                  f"maxsent={r['longest_sentence_words']:3d}")
+            files.append(a)
+        i += 1
+    return run(files, as_json, max_score)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv[1:]))
