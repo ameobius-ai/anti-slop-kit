@@ -3,9 +3,11 @@
 The scores in `RESULTS.md` come from two hand-written texts per language. That
 is a smoke test. This directory holds the harness for a real measurement.
 
-**Status: scaffolding. No run has been executed yet.** `score.py` works and is
-tested. `run.py` needs network access and a model endpoint, which the authoring
-environment did not have. Nothing in `RESULTS.md` comes from this directory.
+**Status: first run executed 2026-08-04** via a local OpenAI-compatible gateway
+(cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`),
+`lang=en`, 24/24 cells written, scored with `score.py`. Earlier scaffolding note:
+the authoring environment had no external network/API key; the harness itself is
+OpenAI-compatible, so any endpoint works.
 
 ## Design
 
@@ -31,6 +33,15 @@ export ANTI_SLOP_API_KEY=...
 export ANTI_SLOP_API_BASE=https://api.example.com/v1   # OpenAI-compatible
 python3 evals/run.py --model MODEL_NAME --lang en --out evals/outputs
 python3 evals/score.py evals/outputs
+```
+
+Against a local OpenAI-compatible gateway (no external network/key — this stack ships one):
+
+```sh
+export ANTI_SLOP_API_KEY=proxypal-local
+export ANTI_SLOP_API_BASE=http://127.0.0.1:8317/v1   # cliproxy
+python3 evals/run.py --model deepseek-v4-flash-free --lang en --out evals/outputs-en
+python3 evals/score.py evals/outputs-en
 ```
 
 `run.py` writes one file per cell named `<task>__<condition>.md`. `score.py`
