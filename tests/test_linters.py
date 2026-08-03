@@ -177,6 +177,74 @@ class RussianRules(unittest.TestCase):
         self.assertEqual(len(diags), total)
 
 
+class RussianSpansAreChargedOnce(unittest.TestCase):
+    """Issue #18: one span on the page is one violation in the report."""
+
+    def test_yo_pair_counts_once(self):
+        """«путем» и «путём» лежали в списке оба, но это одно слово."""
+        for text in ("Данные передаются путём шифрования.",
+                     "Данные передаются путем шифрования."):
+            self.assertEqual(ru.lint(text)["violations"]["clerical"], 1)
+
+    def test_marketing_yo_pair_counts_once(self):
+        self.assertEqual(
+            ru.lint("Это надёжное решение.")["violations"]["marketing"], 1)
+
+    def test_nested_phrase_counts_once(self):
+        """«данный» внутри «в данный момент» — один штамп, не два."""
+        self.assertEqual(
+            ru.lint("В данный момент сервис недоступен.")[
+                "violations"]["clerical"], 1)
+
+    def test_nested_ai_slop_counts_once(self):
+        self.assertEqual(
+            ru.lint("Давайте погрузимся в тему.")["violations"]["ai_slop"], 1)
+
+    def test_longer_phrase_wins_the_span(self):
+        """Побеждать должна длинная фраза: у неё точнее подсказка."""
+        hits = [ph for ph, _ in ru.phrase_matches(
+            "В данный момент сервис недоступен.", ru.CLERICAL)]
+        self.assertEqual(hits, ["в данный момент"])
+
+    def test_separate_spans_still_both_count(self):
+        """Фикс гасит двойной счёт, а не второе вхождение."""
+        r = ru.lint("В данный момент так. Настройка путём замены.")
+        self.assertEqual(r["violations"]["clerical"], 2)
+
+    def test_diagnostics_agree_with_the_count(self):
+        text = "В данный момент данные передаются путём шифрования."
+        total = ru.lint(text)["violations"]["clerical"]
+        diags = [d for d in ru.diagnostics(text) if d[1] == "clerical"]
+        self.assertEqual(len(diags), total)
+
+
+class LexiconIntegrity(unittest.TestCase):
+    """Guard the lists themselves, so a bad entry fails at edit time."""
+
+    RU_LISTS = ("CLERICAL", "MARKETING", "AI_SLOP", "HEDGE")
+    EN_LISTS = ("BANNED", "MARKETING", "AI_SLOP", "HEDGE")
+
+    def test_ru_has_no_entry_duplicated_by_yo_folding(self):
+        """Обе орфографии одной фразы — мёртвый вес после сворачивания ё."""
+        for name in self.RU_LISTS:
+            folded = [ru._fold(p) for p in getattr(ru, name)]
+            dupes = sorted({p for p in folded if folded.count(p) > 1})
+            self.assertEqual(dupes, [], "%s carries both spellings of %s" % (name, dupes))
+
+    def test_en_has_no_duplicate_entries(self):
+        for name in self.EN_LISTS:
+            lowered = [p.lower() for p in getattr(en, name)]
+            dupes = sorted({p for p in lowered if lowered.count(p) > 1})
+            self.assertEqual(dupes, [], "%s repeats %s" % (name, dupes))
+
+    def test_en_prefix_overlaps_do_not_double_count(self):
+        """EN опирается на lookaround: следим, что это так и осталось."""
+        for text, category in (("The tool facilitates review.", "banned_word"),
+                               ("A seamlessly integrated pipeline.", "marketing_adjective"),
+                               ("Our next-generation platform.", "marketing_adjective")):
+            self.assertEqual(en.lint(text)["violations"][category], 1, text)
+
+
 class SampleRegression(unittest.TestCase):
     """The samples are the contract: a slop text scores high, a clean one low."""
 
