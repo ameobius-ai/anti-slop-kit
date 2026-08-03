@@ -19,7 +19,7 @@ ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
 ru/samples/              one slop text and one clean rewrite
 harness/SKILL.md         separate skill: how to design an agent harness
 evals/                   eval harness: 12 tasks, 4 conditions, scorer, runner
-tests/                   66 tests, standard library only
+tests/                   112 tests, standard library only
 hooks/pre-commit         git hook that blocks a commit above the limit
 .pre-commit-config.example.yaml
 RESULTS.md               measured scores and their limits
@@ -54,7 +54,7 @@ The score is violations per 100 words. Lower is cleaner.
 
 | Text | Score | Longest sentence |
 | --- | --- | --- |
-| `en/samples/baseline.md` | 31.85 | 49 words |
+| `en/samples/baseline.md` | 33.12 | 49 words |
 | `en/samples/ste.md` | 0.83 | 14 words |
 | `ru/samples/baseline.md` | 39.32 | 27 words |
 | `ru/samples/utr.md` | 0.00 | 11 words |
