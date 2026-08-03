@@ -33,9 +33,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Lint the English sample
-        run: python en/ste-lint.py --max 2 en/samples/ste.md
+        run: python en/ste-lint.py --format github --max 2 en/samples/ste.md
       - name: Lint the Russian sample
-        run: python ru/ru-ste-lint.py --max 2 ru/samples/utr.md
+        run: python ru/ru-ste-lint.py --format github --max 2 ru/samples/utr.md
       - name: Print the baseline scores for the log
         run: |
           python en/ste-lint.py en/samples/baseline.md
