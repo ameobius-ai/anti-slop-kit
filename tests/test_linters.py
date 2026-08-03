@@ -77,7 +77,7 @@ class EnglishRules(unittest.TestCase):
 
 class EnglishMarkupIsNotProse(unittest.TestCase):
     def test_code_fence_ignored(self):
-        text = "Run it.\\n\\n```python\\nutilize = 'seamless robust'\\n```\\n"
+        text = "Run it.\n\n```python\nutilize = 'seamless robust'\n```\n"
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -87,7 +87,7 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
             en.lint("Call `utilize()` here.")["violations"]["banned_word"], 0)
 
     def test_frontmatter_ignored(self):
-        text = "---\\nname: demo\\ndescription: utilize a seamless robust thing\\n---\\n\\nOpen the file.\\n"
+        text = "---\nname: demo\ndescription: utilize a seamless robust thing\n---\n\nOpen the file.\n"
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -103,9 +103,9 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
 
     def test_ignore_region(self):
-        text = ("Open the file.\\n\\n<!-- anti-slop: off -->\\n"
-                "utilize a seamless robust world-class solution\\n"
-                "<!-- anti-slop: on -->\\n")
+        text = ("Open the file.\n\n<!-- anti-slop: off -->\n"
+                "utilize a seamless robust world-class solution\n"
+                "<!-- anti-slop: on -->\n")
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -195,11 +195,11 @@ class RussianRules(unittest.TestCase):
         self.assertEqual(r["typography"]["straight_quotes"], 2)
 
     def test_code_fence_ignored(self):
-        text = "Откройте файл.\\n\\n```python\\n# в целях осуществления\\nx = 1\\n```\\n"
+        text = "Откройте файл.\n\n```python\n# в целях осуществления\nx = 1\n```\n"
         self.assertEqual(ru.lint(text)["violations"]["clerical"], 0)
 
     def test_frontmatter_ignored(self):
-        text = "---\\nname: demo\\ndescription: в целях осуществления инновационного\\n---\\n\\nОткройте файл.\\n"
+        text = "---\nname: demo\ndescription: в целях осуществления инновационного\n---\n\nОткройте файл.\n"
         r = ru.lint(text)
         self.assertEqual(r["violations"]["clerical"], 0)
         self.assertEqual(r["violations"]["marketing"], 0)
