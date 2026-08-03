@@ -55,12 +55,15 @@ class Naming(unittest.TestCase):
 
 
 class Scoring(unittest.TestCase):
-    def rows(self, files):
+    def collect(self, files):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory)
             for name, text in files.items():
                 (path / name).write_text(text, encoding="utf-8")
             return score.collect(path)
+
+    def rows(self, files):
+        return self.collect(files)[0]
 
     def test_slop_scores_above_clean(self):
         rows = self.rows(
@@ -77,10 +80,45 @@ class Scoring(unittest.TestCase):
         rows = self.rows({"notes.md": SLOP, "en-01-a__bare.md": CLEAN})
         self.assertEqual([row["task"] for row in rows], ["en-01-a"])
 
+    def test_skipped_files_are_reported(self):
+        """Issue #16: a dropped file must not lower n in silence."""
+        rows, skipped = self.collect(
+            {"en-01-a__bare.md": CLEAN, "en-02-bad-name.md": SLOP}
+        )
+        self.assertEqual([row["task"] for row in rows], ["en-01-a"])
+        self.assertEqual(skipped, ["en-02-bad-name.md"])
+
+    def test_nothing_is_skipped_when_every_name_matches(self):
+        _, skipped = self.collect({"en-01-a__bare.md": CLEAN})
+        self.assertEqual(skipped, [])
+
+    def test_report_names_the_skipped_files(self):
+        rows, _ = self.collect({"en-01-a__bare.md": CLEAN})
+        buffer = io.StringIO()
+        score.report(rows, score.summarise(rows), stream=buffer,
+                     skipped=["en-02-bad-name.md"])
+        self.assertIn("en-02-bad-name.md", buffer.getvalue())
+        self.assertIn("Skipped 1 file", buffer.getvalue())
+
+    def test_report_stays_quiet_when_nothing_was_skipped(self):
+        rows, skipped = self.collect({"en-01-a__bare.md": CLEAN})
+        buffer = io.StringIO()
+        score.report(rows, score.summarise(rows), stream=buffer, skipped=skipped)
+        self.assertNotIn("Skipped", buffer.getvalue())
+
+    def test_long_condition_name_keeps_the_columns_aligned(self):
+        rows = self.rows(
+            {"en-01-a__bare.md": CLEAN, "en-01-a__very_long_condition.md": CLEAN}
+        )
+        buffer = io.StringIO()
+        score.report(rows, score.summarise(rows), stream=buffer)
+        lines = [ln for ln in buffer.getvalue().splitlines() if " n=" in ln]
+        self.assertEqual(len({ln.index(" n=") for ln in lines}), 1)
+
     def test_routes_russian_to_the_russian_linter(self):
         rows = self.rows(
             {
-                "ru-01-api-doc__bare.md": "\u0414\u0430\u043d\u043d\u044b\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u0443\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u043c \u0440\u0435\u0448\u0435\u043d\u0438\u0435\u043c \u0432 \u0446\u0435\u043b\u044f\u0445 \u043e\u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043b\u0435\u043d\u0438\u044f \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438 \u0434\u0430\u043d\u043d\u044b\u0445.\n"
+                "ru-01-api-doc__bare.md": "Данный сервис является уникальным решением в целях осуществления обработки данных.\n"
             }
         )
         self.assertEqual(rows[0]["lang"], "ru")
