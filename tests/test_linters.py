@@ -336,6 +336,97 @@ class SpansAreChargedOnceAcrossLists(unittest.TestCase):
                                  counts[cat], "%s %s" % (rel, cat))
 
 
+class LexiconAdditions(unittest.TestCase):
+    """Issues #11 and #12: the words the lists were missing.
+
+    Three of the new English entries are nested inside phrases that were
+    already there, so these tests double as the payoff for #21: the words
+    fire on their own, and stay silent where a longer phrase already
+    covers the span.
+    """
+
+    EN_VERBS = (("The team utilized a cache.", "utilized", "used"),
+                ("We leveraged the queue.", "leveraged", "used"),
+                ("This showcases the parser.", "showcases", "shows"),
+                ("It empowers the operator.", "empowers", "lets"),
+                ("We embark on the migration.", "embark", "start"))
+
+    def test_en_new_verbs_are_flagged_and_carry_a_replacement(self):
+        for text, word, replacement in self.EN_VERBS:
+            self.assertEqual(en.lint(text)["violations"]["banned_word"], 1, text)
+            sug = [d[3] for d in en.diagnostics(text) if d[2] == word]
+            self.assertEqual(sug, ["Use '%s' instead." % replacement], text)
+
+    def test_en_new_puffer_adjectives_are_flagged(self):
+        for text in ("A comprehensive rewrite.", "A plethora of options.",
+                     "A myriad of flags.", "The tool boasts three modes.",
+                     "A meticulously tuned index."):
+            self.assertEqual(
+                en.lint(text)["violations"]["marketing_adjective"], 1, text)
+
+    def test_en_new_openers_are_flagged(self):
+        for text in ("In today's world, cache everything.",
+                     "At its core, the parser is a loop.",
+                     "Look no further than the log."):
+            self.assertEqual(en.lint(text)["violations"]["ai_slop"], 1, text)
+
+    def test_a_new_short_word_does_not_double_charge_a_longer_phrase(self):
+        """The reason #21 had to land before these words could be added."""
+        for text, category, phrase in (
+                ("We delve into the logs.", "ai_slop", "delve into"),
+                ("This will unlock the power of caching.",
+                 "marketing_adjective", "unlock the power"),
+                ("In today's fast-paced world, cache.",
+                 "ai_slop", "in today's fast-paced world"),
+                ("A comprehensive solution ships.",
+                 "marketing_adjective", "comprehensive solution")):
+            hits = [(c, p) for c, p, _ in en.categorised_matches(text)]
+            self.assertEqual(hits, [(category, phrase)], text)
+
+    def test_the_same_short_words_still_fire_alone(self):
+        for text, category, phrase in (
+                ("We delve deeper.", "banned_word", "delve"),
+                ("Unlock the door.", "banned_word", "unlock"),
+                ("A fast-paced release train.",
+                 "marketing_adjective", "fast-paced")):
+            hits = [(c, p) for c, p, _ in en.categorised_matches(text)]
+            self.assertEqual(hits, [(category, phrase)], text)
+
+    def test_absorbed_words_add_nothing_to_the_baseline_sample(self):
+        """In the sample these three sit inside longer phrases already flagged."""
+        text = (ROOT / "en/samples/baseline.md").read_text(encoding="utf-8")
+        found = {p for _, p, _ in en.categorised_matches(text)}
+        for word in ("unlock", "fast-paced", "comprehensive"):
+            self.assertNotIn(word, found)
+
+    def test_ru_new_clerical_entries(self):
+        for text in ("Нужно произвести настройку.",
+                     "Следует осуществить проверку.",
+                     "В настоящий момент узел недоступен."):
+            self.assertEqual(ru.lint(text)["violations"]["clerical"], 1, text)
+
+    def test_ru_new_marketing_and_hedge_entries(self):
+        self.assertEqual(
+            ru.lint("Сделаем в кратчайшие сроки.")["violations"]["marketing"], 1)
+        for text in ("На самом деле кэш пуст.", "Это своего рода очередь."):
+            self.assertEqual(ru.lint(text)["violations"]["hedge"], 1, text)
+
+    def test_ru_replacements_are_offered(self):
+        for text, word, replacement in (
+                ("Нужно произвести настройку.", "произвести", "сделать"),
+                ("В настоящий момент узел недоступен.",
+                 "в настоящий момент", "сейчас")):
+            sug = [d[3] for d in ru.diagnostics(text) if d[2] == word]
+            self.assertEqual(sug, ["Напишите «%s»." % replacement], text)
+
+    def test_clean_samples_stay_clean(self):
+        """New entries must not fire on the prose we hold up as the target."""
+        for mod, rel in ((en, "en/samples/ste.md"), (ru, "ru/samples/utr.md")):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertEqual(
+                [p for _, p, _ in mod.categorised_matches(text)], [], rel)
+
+
 class LexiconIntegrity(unittest.TestCase):
     """Guard the lists themselves, so a bad entry fails at edit time."""
 
@@ -354,6 +445,27 @@ class LexiconIntegrity(unittest.TestCase):
             lowered = [p.lower() for p in getattr(en, name)]
             dupes = sorted({p for p in lowered if lowered.count(p) > 1})
             self.assertEqual(dupes, [], "%s repeats %s" % (name, dupes))
+
+    def test_no_source_file_carries_a_replacement_character(self):
+        """U+FFFD means a byte was lost in an edit and a rule silently died.
+
+        A corrupted REPLACE key still parses, still passes every other
+        test, and quietly stops offering its suggestion. Only a byte-level
+        check catches it.
+        """
+        for rel in ("en/ste-lint.py", "ru/ru-ste-lint.py",
+                    "tests/test_linters.py", "evals/score.py", "evals/run.py"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertEqual(text.count("\ufffd"), 0, rel)
+
+    def test_every_replacement_key_is_a_real_lexicon_entry(self):
+        """A REPLACE key that matches nothing can never be shown."""
+        for mod, lists, fold in (
+                (en, self.EN_LISTS, lambda s: s.lower()),
+                (ru, self.RU_LISTS, ru._fold)):
+            entries = {fold(p) for name in lists for p in getattr(mod, name)}
+            orphans = sorted(k for k in mod.REPLACE if fold(k) not in entries)
+            self.assertEqual(orphans, [], "unreachable REPLACE keys: %s" % orphans)
 
     def test_en_prefix_overlaps_do_not_double_count(self):
         """EN опирается на lookaround: следим, что это так и осталось."""
