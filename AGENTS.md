@@ -17,7 +17,7 @@ en/SKILL.md, en/ste-lint.py, en/samples/     English skill, linter, samples
 ru/SKILL.md, ru/ru-ste-lint.py, ru/samples/  Russian skill, linter, samples
 harness/SKILL.md                             separate skill: agent harness design
 evals/                                       eval harness, never run yet
-tests/                                       unittest suite, 43 tests
+tests/                                       unittest suite, 112 tests
 hooks/pre-commit                             local git hook
 RESULTS.md                                   measured scores and their limits
 ```
