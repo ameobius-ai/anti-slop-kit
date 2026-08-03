@@ -39,6 +39,11 @@ BANNED = [
     "prior to", "subsequent to", "with regard to", "in terms of",
     "a number of", "the vast majority of", "it should be noted that",
     "it is important to note", "it is worth noting", "needless to say",
+    "utilizes", "utilized", "utilising", "utilised", "leverages",
+    "leveraged", "delve", "delves", "delved", "delving", "harness",
+    "harnesses", "harnessing", "showcase", "showcases", "showcasing",
+    "unlock", "unlocks", "unlocking", "elevate", "elevates", "elevating",
+    "empower", "empowers", "empowering", "embark", "embarks", "embarking",
 ]
 
 MARKETING = [
@@ -48,6 +53,9 @@ MARKETING = [
     "game-changing", "game changer", "best-in-class", "industry-leading",
     "unparalleled", "unlock the power", "supercharge", "blazing fast",
     "comprehensive solution", "holistic approach", "rich set of features",
+    "comprehensive", "plethora", "myriad", "renowned", "meticulous",
+    "meticulously", "invaluable", "vibrant", "fast-paced", "ever-evolving",
+    "boasts",
 ]
 
 AI_SLOP = [
@@ -58,6 +66,8 @@ AI_SLOP = [
     "when it comes to", "it's not just", "it is not just",
     "more than just", "navigating the complexities", "delve into",
     "tapestry", "testament to", "in conclusion,", "to sum up,",
+    "in today's world", "at its core", "look no further",
+    "navigate the landscape", "navigating the landscape",
 ]
 
 HEDGE = [
@@ -67,7 +77,7 @@ HEDGE = [
 ]
 
 CONTRACTION_RE = re.compile(
-    r"\b\w+'(?:s|t|re|ve|ll|d|m)\b|\b\w+\u2019(?:s|t|re|ve|ll|d|m)\b", re.I)
+    r"\\b\\w+'(?:s|t|re|ve|ll|d|m)\\b|\\b\\w+\\u2019(?:s|t|re|ve|ll|d|m)\\b", re.I)
 
 # Irregular past participles that do not end in -ed/-en, so the suffix rule
 # alone misses "is read", "is put", "was held".
@@ -76,13 +86,13 @@ IRREGULAR_PARTICIPLES = (
     "told|cut|hit|let|split|spread|hurt|cost|heard|felt|sold|dealt|meant"
 )
 PASSIVE_RE = re.compile(
-    r"\b(?:am|is|are|was|were|be|been|being|get|gets|got)\s+"
-    r"(?:\w+ly\s+)?(?:\w+(?:ed|en|own|ought|uilt|ent)|"
-    + IRREGULAR_PARTICIPLES + r")\b", re.I)
+    r"\\b(?:am|is|are|was|were|be|been|being|get|gets|got)\\s+"
+    r"(?:\\w+ly\\s+)?(?:\\w+(?:ed|en|own|ought|uilt|ent)|"
+    + IRREGULAR_PARTICIPLES + r")\\b", re.I)
 
 NOMINAL_RE = re.compile(
-    r"\b\w{4,}(?:tion|sion|ment|ance|ence|ility|ization|isation)s?\b", re.I)
-ING_MAIN_RE = re.compile(r"(?:^|(?<=[.!?]\s))\s*\w+ing\b", re.I)
+    r"\\b\\w{4,}(?:tion|sion|ment|ance|ence|ility|ization|isation)s?\\b", re.I)
+ING_MAIN_RE = re.compile(r"(?:^|(?<=[.!?]\\s))\\s*\\w+ing\\b", re.I)
 # Sentence-initial words that merely end in "-ing" and are not participle
 # openers (issue #13). Imperatives like "Bring the file." are good STE.
 ING_STOP = frozenset({
@@ -90,19 +100,19 @@ ING_STOP = frozenset({
     "fling", "king", "morning", "nothing", "offspring", "ring",
     "something", "spring", "sting", "string", "swing", "thing", "wing",
 })
-MODAL_RE = re.compile(r"\b(?:could|should|would|may|might)\b", re.I)
-WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\u2019\-/]*")
+MODAL_RE = re.compile(r"\\b(?:could|should|would|may|might)\\b", re.I)
+WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\\u2019\\-/]*")
 
 # --- markup that must not be scored -------------------------------------------
 
-FRONTMATTER_RE = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.S)
+FRONTMATTER_RE = re.compile(r"\\A---\\r?\\n.*?\\r?\\n---\\r?\\n", re.S)
 IGNORE_RE = re.compile(
-    r"<!--\s*anti-slop:\s*off\s*-->.*?<!--\s*anti-slop:\s*on\s*-->", re.S | re.I)
+    r"<!--\\s*anti-slop:\\s*off\\s*-->.*?<!--\\s*anti-slop:\\s*on\\s*-->", re.S | re.I)
 FENCE_RE = re.compile(r"```.*?```", re.S)
 INLINE_CODE_RE = re.compile(r"`[^`]*`")
-MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
-MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-BARE_URL_RE = re.compile(r"https?://\S+")
+MD_IMAGE_RE = re.compile(r"!\\[[^\\]]*\\]\\([^)]*\\)")
+MD_LINK_RE = re.compile(r"\\[([^\\]]*)\\]\\([^)]*\\)")
+BARE_URL_RE = re.compile(r"https?://\\S+")
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 
 
@@ -118,7 +128,7 @@ def preprocess(text):
     t = FENCE_RE.sub(" ", t)
     t = INLINE_CODE_RE.sub(" ", t)
     t = MD_IMAGE_RE.sub(" ", t)
-    t = MD_LINK_RE.sub(r"\1", t)
+    t = MD_LINK_RE.sub(r"\\1", t)
     t = BARE_URL_RE.sub(" ", t)
     t = HTML_COMMENT_RE.sub(" ", t)
     return t
@@ -126,15 +136,15 @@ def preprocess(text):
 
 def sentences(text):
     out = []
-    for line in text.split("\n"):
+    for line in text.split("\\n"):
         s = line.strip()
         if not s:
             continue
-        s = re.sub(r"^\s*#{1,6}\s*", "", s)
-        s = re.sub(r"^\s*(?:[-*+\u2022]|\d+[.)])\s+", "", s)
+        s = re.sub(r"^\\s*#{1,6}\\s*", "", s)
+        s = re.sub(r"^\\s*(?:[-*+\\u2022]|\\d+[.)])\\s+", "", s)
         if not s:
             continue
-        for p in re.split(r"(?<=[.!?])\s+", s):
+        for p in re.split(r"(?<=[.!?])\\s+", s):
             p = p.strip()
             if p:
                 out.append(p)
@@ -232,7 +242,7 @@ def lint(text):
     v["modal_hedge"] = (len(MODAL_RE.findall(text))
                         + sum(1 for cat, _, _ in cm if cat == "modal_hedge"))
 
-    paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
+    paras = [p for p in re.split(r"\\n\\s*\\n", text) if p.strip()]
     v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
 
     total = sum(v.values())
@@ -243,7 +253,7 @@ def lint(text):
         "per100w": {k: round(x * 100.0 / words, 2) for k, x in v.items()},
         "total": total,
         "total_per100w": round(total * 100.0 / words, 2),
-        "em_dash(slop-marker)": text.count("\u2014"),
+        "em_dash(slop-marker)": text.count("\\u2014"),
         "longest_sentence_words": max((wc(s) for s in sents), default=0),
         "sample_banned": list(dict.fromkeys(bh))[:8],
         "sample_marketing": list(dict.fromkeys(mh))[:8],
@@ -278,6 +288,17 @@ REPLACE = {
     "subsequent to": "after", "with regard to": "about",
     "in terms of": "in", "a number of": "several",
     "the vast majority of": "most",
+    "utilizes": "uses", "utilized": "used", "utilising": "using",
+    "utilised": "used", "leverages": "uses", "leveraged": "used",
+    "delve": "examine", "delves": "examines", "delved": "examined",
+    "delving": "examining", "harness": "use", "harnesses": "uses",
+    "harnessing": "using", "showcase": "show", "showcases": "shows",
+    "showcasing": "showing", "unlock": "enable", "unlocks": "enables",
+    "unlocking": "enabling", "elevate": "improve", "elevates": "improves",
+    "elevating": "improving", "empower": "let", "empowers": "lets",
+    "empowering": "letting", "embark": "start", "embarks": "starts",
+    "embarking": "starting", "comprehensive": "full", "plethora": "many",
+    "myriad": "many", "boasts": "has",
 }
 
 
@@ -303,13 +324,13 @@ def diagnostics(text):
     frontmatter, fences, ignored regions, comments; strips inline markup.
     """
     out = []
-    lines = text.split("\n")
+    lines = text.split("\\n")
     in_fm = bool(FRONTMATTER_RE.match(text))
     fm_end = 0
     if in_fm:
-        m = re.search(r"\r?\n---\r?\n", text[4:])
+        m = re.search(r"\\r?\\n---\\r?\\n", text[4:])
         if m:
-            fm_end = text[:].count("\n", 0, 4 + m.end())
+            fm_end = text[:].count("\\n", 0, 4 + m.end())
     in_fence = in_ignore = False
     para_start, para_sents = None, 0
     for i, line in enumerate(lines, 1):
@@ -321,20 +342,20 @@ def diagnostics(text):
             continue
         if in_fence:
             continue
-        if re.search(r"<!--\s*anti-slop:\s*off\s*-->", s, re.I):
+        if re.search(r"<!--\\s*anti-slop:\\s*off\\s*-->", s, re.I):
             in_ignore = True
             continue
-        if re.search(r"<!--\s*anti-slop:\s*on\s*-->", s, re.I):
+        if re.search(r"<!--\\s*anti-slop:\\s*on\\s*-->", s, re.I):
             in_ignore = False
             continue
         if in_ignore or re.fullmatch(r"<!--.*-->", s):
             continue
         s = INLINE_CODE_RE.sub(" ", s)
         s = MD_IMAGE_RE.sub(" ", s)
-        s = MD_LINK_RE.sub(r"\1", s)
+        s = MD_LINK_RE.sub(r"\\1", s)
         s = BARE_URL_RE.sub(" ", s)
-        s = re.sub(r"^\s*#{1,6}\s*", "", s)
-        s = re.sub(r"^\s*(?:[-*+\u2022]|\d+[.)])\s+", "", s)
+        s = re.sub(r"^\\s*#{1,6}\\s*", "", s)
+        s = re.sub(r"^\\s*(?:[-*+\\u2022]|\\d+[.)])\\s+", "", s)
         if not s:
             if para_start is not None and para_sents > 6:
                 out.append((para_start, "long_paragraph(>6s)",
@@ -343,7 +364,7 @@ def diagnostics(text):
             continue
         if para_start is None:
             para_start = i
-        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", s) if p.strip()]
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\\s+", s) if p.strip()]
         para_sents += len(parts)
         for p in parts:
             if wc(p) > 20:
@@ -368,7 +389,7 @@ def diagnostics(text):
 
 
 def _gh_escape(v):
-    return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return v.replace("%", "%25").replace("\\r", "%0D").replace("\\n", "%0A")
 
 
 def report(name, r, as_json, max_score, explain=False, fmt="text", text=None):
