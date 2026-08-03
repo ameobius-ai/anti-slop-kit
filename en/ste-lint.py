@@ -145,16 +145,30 @@ def wc(s):
     return len(WORD_RE.findall(s))
 
 
-def count_phrases(text, phrases):
+def phrase_matches(text, phrases):
+    """Return [(phrase, span)], charging each span once (issue #18).
+
+    Longest phrase wins, so 'delve into' is one hit, not 'delve' plus
+    'delve into'. The lists are deliberately kept per-language, so this
+    mirrors the Russian helper instead of sharing it.
+    """
     low = text.lower()
-    n, hits = 0, []
-    for ph in phrases:
-        p = ph.lower()
-        pat = r"(?<![a-z])" + re.escape(p) + r"(?![a-z])"
-        for _ in re.finditer(pat, low):
-            n += 1
-            hits.append(ph)
-    return n, hits
+    found, taken = [], []
+    for ph in sorted(phrases, key=len, reverse=True):
+        pat = r"(?<![a-z])" + re.escape(ph.lower()) + r"(?![a-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((ph, (start, end)))
+    found.sort(key=lambda f: f[1][0])
+    return found
+
+
+def count_phrases(text, phrases):
+    hits = [ph for ph, _ in phrase_matches(text, phrases)]
+    return len(hits), hits
 
 
 def _ing_main_count(text):
@@ -230,14 +244,10 @@ REPLACE = {
 
 
 def _phrase_hits(text, phrases, lineno, category, out):
-    low = text.lower()
-    for ph in phrases:
-        p = ph.lower()
-        pat = r"(?<![a-z])" + re.escape(p) + r"(?![a-z])"
-        for _ in re.finditer(pat, low):
-            sug = REPLACE.get(p)
-            sug = f"Use '{sug}' instead." if sug else SUGGEST[category]
-            out.append((lineno, category, ph, sug))
+    for ph, _span in phrase_matches(text, phrases):
+        rep = REPLACE.get(ph.lower())
+        sug = f"Use '{rep}' instead." if rep else SUGGEST[category]
+        out.append((lineno, category, ph, sug))
 
 
 def diagnostics(text):
