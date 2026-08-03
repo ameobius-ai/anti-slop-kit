@@ -4,6 +4,9 @@
 Reads a directory of files named <task>__<condition>.md, scores each file with
 the linter for its language, and reports the mean per condition.
 
+A file that does not match that pattern is skipped and named on stderr. A silent
+skip would lower n and change the mean with nothing in the report to show it.
+
 The language comes from the task prefix: en-* uses en/ste-lint.py, ru-* uses
 ru/ru-ste-lint.py.
 
@@ -37,11 +40,15 @@ def load(relpath, name):
 
 
 def collect(directory):
+    """Return (rows, skipped), where skipped holds the names that did not match."""
     rows = []
+    skipped = []
     linters = {}
     for path in sorted(pathlib.Path(directory).iterdir()):
         match = NAME_RE.match(path.name)
         if match is None:
+            if path.is_file():
+                skipped.append(path.name)
             continue
         lang = match.group("lang")
         if lang not in linters:
@@ -58,7 +65,7 @@ def collect(directory):
                 "max_sentence": result["longest_sentence_words"],
             }
         )
-    return rows
+    return rows, skipped
 
 
 def summarise(rows):
@@ -82,7 +89,7 @@ def order(conditions):
     return known + sorted(c for c in conditions if c not in CONDITION_ORDER)
 
 
-def report(rows, summary, stream=None):
+def report(rows, summary, stream=None, skipped=None):
     stream = sys.stdout if stream is None else stream
     for row in rows:
         print(
@@ -92,15 +99,22 @@ def report(rows, summary, stream=None):
     print("", file=stream)
     for lang in sorted(summary):
         print("[%s] mean score per condition, lower is cleaner" % lang, file=stream)
+        width = max([10] + [len(c) for c in summary[lang]])
         for condition in order(summary[lang]):
             stats = summary[lang][condition]
             print(
-                "  {c:10} n={n:2d} mean={mean:6.2f} median={median:6.2f} worst={worst:6.2f}".format(
-                    c=condition, **stats
+                "  {c:<{w}} n={n:2d} mean={mean:6.2f} median={median:6.2f} worst={worst:6.2f}".format(
+                    c=condition, w=width, **stats
                 ),
                 file=stream,
             )
     print("", file=stream)
+    if skipped:
+        print(
+            "Skipped %d file(s) that do not match <task>__<condition>.md: %s"
+            % (len(skipped), ", ".join(skipped)),
+            file=stream,
+        )
     print("Score measures register, not correctness. Read the outputs too.", file=stream)
 
 
@@ -115,15 +129,26 @@ def main(argv):
     if not directory.is_dir():
         print("score.py: not a directory: %s" % directory, file=sys.stderr)
         return 2
-    rows = collect(directory)
+    rows, skipped = collect(directory)
+    for name in skipped:
+        print(
+            "score.py: skipped file that does not match <task>__<condition>.md: %s" % name,
+            file=sys.stderr,
+        )
     if not rows:
         print("score.py: no files named <task>__<condition>.md in %s" % directory, file=sys.stderr)
         return 2
     summary = summarise(rows)
     if as_json:
-        print(json.dumps({"rows": rows, "summary": summary}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"rows": rows, "summary": summary, "skipped": skipped},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
-        report(rows, summary)
+        report(rows, summary, skipped=skipped)
     return 0
 
 
