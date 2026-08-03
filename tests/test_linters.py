@@ -77,7 +77,7 @@ class EnglishRules(unittest.TestCase):
 
 class EnglishMarkupIsNotProse(unittest.TestCase):
     def test_code_fence_ignored(self):
-        text = "Run it.\n\n```python\nutilize = 'seamless robust'\n```\n"
+        text = "Run it.\\n\\n```python\\nutilize = 'seamless robust'\\n```\\n"
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -87,7 +87,7 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
             en.lint("Call `utilize()` here.")["violations"]["banned_word"], 0)
 
     def test_frontmatter_ignored(self):
-        text = "---\nname: demo\ndescription: utilize a seamless robust thing\n---\n\nOpen the file.\n"
+        text = "---\\nname: demo\\ndescription: utilize a seamless robust thing\\n---\\n\\nOpen the file.\\n"
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -103,9 +103,9 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
 
     def test_ignore_region(self):
-        text = ("Open the file.\n\n<!-- anti-slop: off -->\n"
-                "utilize a seamless robust world-class solution\n"
-                "<!-- anti-slop: on -->\n")
+        text = ("Open the file.\\n\\n<!-- anti-slop: off -->\\n"
+                "utilize a seamless robust world-class solution\\n"
+                "<!-- anti-slop: on -->\\n")
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
@@ -195,11 +195,11 @@ class RussianRules(unittest.TestCase):
         self.assertEqual(r["typography"]["straight_quotes"], 2)
 
     def test_code_fence_ignored(self):
-        text = "Откройте файл.\n\n```python\n# в целях осуществления\nx = 1\n```\n"
+        text = "Откройте файл.\\n\\n```python\\n# в целях осуществления\\nx = 1\\n```\\n"
         self.assertEqual(ru.lint(text)["violations"]["clerical"], 0)
 
     def test_frontmatter_ignored(self):
-        text = "---\nname: demo\ndescription: в целях осуществления инновационного\n---\n\nОткройте файл.\n"
+        text = "---\\nname: demo\\ndescription: в целях осуществления инновационного\\n---\\n\\nОткройте файл.\\n"
         r = ru.lint(text)
         self.assertEqual(r["violations"]["clerical"], 0)
         self.assertEqual(r["violations"]["marketing"], 0)
@@ -259,6 +259,81 @@ class RussianSpansAreChargedOnce(unittest.TestCase):
         total = ru.lint(text)["violations"]["clerical"]
         diags = [d for d in ru.diagnostics(text) if d[1] == "clerical"]
         self.assertEqual(len(diags), total)
+
+
+class SpansAreChargedOnceAcrossLists(unittest.TestCase):
+    """One span belongs to one list, even when two lists could claim it.
+
+    phrase_matches() guards a single list at a time. These tests pin the
+    wider invariant (issue #21), so #11 can put 'delve' in BANNED while
+    'delve into' stays in AI_SLOP without charging the reader twice.
+    The pairs below are injected rather than real: no phrase in the
+    shipped lists is nested inside a phrase from another list today.
+    """
+
+    def _with_extra(self, mod, category, phrase):
+        return tuple((c, (list(ph) + [phrase]) if c == category else ph)
+                     for c, ph in mod.PHRASE_GROUPS)
+
+    def test_en_long_phrase_wins_over_a_short_one_from_another_list(self):
+        groups = self._with_extra(en, "banned_word", "delve")
+        hits = en.categorised_matches("We delve into the logs.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("ai_slop", "delve into")])
+
+    def test_en_short_word_still_fires_on_its_own(self):
+        groups = self._with_extra(en, "banned_word", "delve")
+        hits = en.categorised_matches("We delve deeper.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("banned_word", "delve")])
+
+    def test_ru_long_phrase_wins_over_a_short_one_from_another_list(self):
+        groups = self._with_extra(ru, "hedge", "разберемся")
+        hits = ru.categorised_matches("Давайте разберёмся с логами.", groups)
+        self.assertEqual([c for c, _, _ in hits], ["ai_slop"])
+
+    def test_ru_short_word_still_fires_on_its_own(self):
+        groups = self._with_extra(ru, "hedge", "разберемся")
+        hits = ru.categorised_matches("Разберёмся с логами.", groups)
+        self.assertEqual([c for c, _, _ in hits], ["hedge"])
+
+    def test_a_tie_goes_to_the_earlier_list(self):
+        groups = (("banned_word", ["robust"]),
+                  ("marketing_adjective", ["robust"]))
+        hits = en.categorised_matches("A robust API.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("banned_word", "robust")])
+
+    def test_no_phrase_lives_in_two_lists(self):
+        for mod, fold in ((en, lambda s: s.lower()), (ru, ru._fold)):
+            seen = {}
+            for cat, phrases in mod.PHRASE_GROUPS:
+                for ph in phrases:
+                    seen.setdefault(fold(ph), []).append(cat)
+            dupes = {p: c for p, c in seen.items() if len(c) > 1}
+            self.assertEqual(dupes, {}, "a phrase sits in two lists: %s" % dupes)
+
+    def test_hits_come_back_in_reading_order(self):
+        groups = (("banned_word", ["whilst"]), ("marketing_adjective", ["robust"]))
+        hits = en.categorised_matches("A robust API, whilst small.", groups)
+        self.assertEqual([p for _, p, _ in hits], ["robust", "whilst"])
+
+    def test_lint_and_diagnostics_agree_on_the_samples(self):
+        pairs = ((en, "en/samples/baseline.md",
+                  ("banned_word", "marketing_adjective", "ai_slop")),
+                 (en, "en/samples/ste.md",
+                  ("banned_word", "marketing_adjective", "ai_slop")),
+                 (ru, "ru/samples/baseline.md",
+                  ("clerical", "marketing", "ai_slop", "hedge")),
+                 (ru, "ru/samples/utr.md",
+                  ("clerical", "marketing", "ai_slop", "hedge")))
+        for mod, rel, cats in pairs:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            counts = mod.lint(text)["violations"]
+            diags = mod.diagnostics(text)
+            for cat in cats:
+                self.assertEqual(sum(1 for d in diags if d[1] == cat),
+                                 counts[cat], "%s %s" % (rel, cat))
 
 
 class LexiconIntegrity(unittest.TestCase):
