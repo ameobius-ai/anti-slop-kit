@@ -13,6 +13,13 @@ the day someone remembers to list it.
 import pathlib
 import unittest
 
+# Written as code points on purpose. A file about mangled bytes should
+# not depend on its own escape sequences surviving every editor and
+# transport that touches it.
+REPLACEMENT = chr(0xFFFD)
+CR = bytes([13])
+LF = bytes([10])
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "node_modules"}
@@ -60,13 +67,13 @@ class RepositoryBytes(unittest.TestCase):
         """U+FFFD is a byte that was lost in an edit, not a character."""
         for path in self.files:
             text = path.read_text(encoding="utf-8")
-            self.assertEqual(text.count("\\ufffd"), 0,
+            self.assertEqual(text.count(REPLACEMENT), 0,
                              "%s carries U+FFFD" % path.relative_to(ROOT))
 
     def test_no_file_uses_carriage_returns(self):
         """CRLF breaks the linters' line numbers and the hook's diffing."""
         for path in self.files:
-            self.assertNotIn(b"\\r", path.read_bytes(),
+            self.assertNotIn(CR, path.read_bytes(),
                              "%s uses CR line endings" % path.relative_to(ROOT))
 
     def test_every_file_ends_with_a_newline(self):
@@ -79,7 +86,7 @@ class RepositoryBytes(unittest.TestCase):
             raw = path.read_bytes()
             if not raw:
                 continue
-            self.assertTrue(raw.endswith(b"\\n"),
+            self.assertTrue(raw.endswith(LF),
                             "%s has no final newline" % path.relative_to(ROOT))
 
 
