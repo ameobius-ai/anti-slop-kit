@@ -56,6 +56,24 @@ class EnglishRules(unittest.TestCase):
         r = en.lint("The parser reads the file and writes a report.")
         self.assertEqual(r["violations"]["passive_voice"], 0)
 
+    def test_ing_opener_stoplist(self):
+        """Issue #13: sentence-initial -ing words that are not participles."""
+        for text in ("Bring the file to the node.",
+                     "During the meeting, write notes.",
+                     "Something went wrong. Check the log."):
+            self.assertEqual(en.lint(text)["violations"]["ing_main_verb"], 0)
+
+    def test_ing_opener_true_positive(self):
+        r = en.lint("Using the cache, write the key.")
+        self.assertGreaterEqual(r["violations"]["ing_main_verb"], 1)
+
+    def test_ing_stoplist_keeps_diagnostics_in_sync(self):
+        text = "Bring the file. Something went wrong. Using the cache, write it."
+        total = en.lint(text)["violations"]["ing_main_verb"]
+        diags = [d for d in en.diagnostics(text) if d[1] == "ing_main_verb"]
+        self.assertEqual(total, 1)  # only "Using" survives the stoplist
+        self.assertEqual(len(diags), total)
+
 
 class EnglishMarkupIsNotProse(unittest.TestCase):
     def test_code_fence_ignored(self):
@@ -142,6 +160,21 @@ class RussianRules(unittest.TestCase):
         r = ru.lint(text)
         self.assertEqual(r["violations"]["clerical"], 0)
         self.assertEqual(r["violations"]["marketing"], 0)
+
+    def test_participle_stoplist(self):
+        """Issue #14: lexicalized -щий adjectives are not participles."""
+        for text in ("Откройте следующий файл.",
+                     "См. соответствующий раздел.",
+                     "Установите подходящий драйвер.",
+                     "Обновите существующий узел."):
+            self.assertEqual(ru.lint(text)["violations"]["participle"], 0)
+
+    def test_participle_stoplist_keeps_diagnostics_in_sync(self):
+        text = "Откройте следующий файл. Сервис, позволяющий читать файлы."
+        total = ru.lint(text)["violations"]["participle"]
+        diags = [d for d in ru.diagnostics(text) if d[1] == "participle"]
+        self.assertEqual(total, 1)  # only «позволяющий» survives
+        self.assertEqual(len(diags), total)
 
 
 class SampleRegression(unittest.TestCase):
