@@ -19,11 +19,12 @@ ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
 ru/samples/              one slop text and one clean rewrite
 harness/SKILL.md         separate skill: how to design an agent harness
 evals/                   eval harness: 12 tasks, 4 conditions, scorer, runner
-tests/                   52 tests, standard library only
+tests/                   61 tests, standard library only
 hooks/pre-commit         git hook that blocks a commit above the limit
 .pre-commit-config.example.yaml
 RESULTS.md               measured scores and their limits
 CONTRIBUTING.md          how to contribute rules, tests, and fixes
+demo.sh                  one-command demo: samples, findings, tests
 ```
 
 ## Quick start
