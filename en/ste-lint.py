@@ -83,6 +83,13 @@ PASSIVE_RE = re.compile(
 NOMINAL_RE = re.compile(
     r"\b\w{4,}(?:tion|sion|ment|ance|ence|ility|ization|isation)s?\b", re.I)
 ING_MAIN_RE = re.compile(r"(?:^|(?<=[.!?]\s))\s*\w+ing\b", re.I)
+# Sentence-initial words that merely end in "-ing" and are not participle
+# openers (issue #13). Imperatives like "Bring the file." are good STE.
+ING_STOP = frozenset({
+    "anything", "bring", "cling", "during", "everything", "evening",
+    "fling", "king", "morning", "nothing", "offspring", "ring",
+    "something", "spring", "sting", "string", "swing", "thing", "wing",
+})
 MODAL_RE = re.compile(r"\b(?:could|should|would|may|might)\b", re.I)
 WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\u2019\-/]*")
 
@@ -150,6 +157,12 @@ def count_phrases(text, phrases):
     return n, hits
 
 
+def _ing_main_count(text):
+    """Sentence-initial -ing matches, minus the non-participle stoplist."""
+    return sum(1 for m in ING_MAIN_RE.finditer(text)
+               if m.group(0).strip().lower() not in ING_STOP)
+
+
 def lint(text):
     text = preprocess(text)
     sents = sentences(text)
@@ -160,7 +173,7 @@ def lint(text):
     v["semicolon"] = text.count(";")
     v["contraction"] = len(CONTRACTION_RE.findall(text))
     v["passive_voice"] = len(PASSIVE_RE.findall(text))
-    v["ing_main_verb"] = len(ING_MAIN_RE.findall(text))
+    v["ing_main_verb"] = _ing_main_count(text)
     v["nominalization"] = len(NOMINAL_RE.findall(text))
     v["banned_word"], bh = count_phrases(text, BANNED)
     v["marketing_adjective"], mh = count_phrases(text, MARKETING)
@@ -287,6 +300,8 @@ def diagnostics(text):
                          (ING_MAIN_RE, "ing_main_verb"), (NOMINAL_RE, "nominalization"),
                          (MODAL_RE, "modal_hedge")):
             for m in cre.finditer(s):
+                if cre is ING_MAIN_RE and m.group(0).strip().lower() in ING_STOP:
+                    continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
         _phrase_hits(s, BANNED, i, "banned_word", out)
         _phrase_hits(s, MARKETING, i, "marketing_adjective", out)
