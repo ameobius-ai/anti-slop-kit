@@ -3,11 +3,17 @@
 The scores in `RESULTS.md` come from two hand-written texts per language. That
 is a smoke test. This directory holds the harness for a real measurement.
 
-**Status: first run executed 2026-08-04** via a local OpenAI-compatible gateway
-(cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`),
-`lang=en`, 24/24 cells written, scored with `score.py`. Earlier scaffolding note:
-the authoring environment had no external network/API key; the harness itself is
-OpenAI-compatible, so any endpoint works.
+**Status: first full run executed 2026-08-04** via a local OpenAI-compatible gateway
+(cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`).
+en 23/24 cells (1 timeout on `en-05__banlist`), ru 24/24. Mean per condition (lower is cleaner):
+
+| lang | bare | plain | banlist | skill |
+|---|---|---|---|---|
+| en | 5.78 | 7.89 | 5.18 | **2.64** |
+| ru | 10.73 | 10.70 | 9.59 | **7.22** |
+
+Earlier scaffolding note: the authoring environment had no external network/API key;
+the harness itself is OpenAI-compatible, so any endpoint works.
 
 ## Design
 
