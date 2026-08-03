@@ -12,6 +12,8 @@ Usage:
     python3 ste-lint.py --max 5 docs/*.md      # exit 1 if a file scores above 5
     cat draft.md | python3 ste-lint.py
     python3 ste-lint.py --json draft.md
+    python3 ste-lint.py --explain draft.md     # per-line findings with fixes
+    python3 ste-lint.py --format github --max 5 docs/*.md   # CI annotations
 
 Exit codes:
     0 - every file is at or below the threshold (or no threshold was given)
@@ -184,13 +186,137 @@ def lint(text):
     }
 
 
-def report(name, r, as_json, max_score):
+SUGGEST = {
+    "long_sentence(>20w)": "Split into sentences of 20 words or fewer.",
+    "semicolon": "Use a full stop. One sentence, one idea.",
+    "contraction": "Write both words in full.",
+    "passive_voice": "Name the actor. Use active voice.",
+    "ing_main_verb": "Start with the subject and a finite verb.",
+    "nominalization": "Prefer the verb form.",
+    "banned_word": "Use the plain word.",
+    "marketing_adjective": "Delete, or give the number that proves it.",
+    "ai_slop": "Delete the filler phrase.",
+    "modal_hedge": "State the fact or the condition.",
+    "long_paragraph(>6s)": "Split into paragraphs of 6 sentences or fewer.",
+}
+
+REPLACE = {
+    "utilize": "use", "utilise": "use", "utilization": "use",
+    "leverage": "use", "leveraging": "use", "facilitate": "help",
+    "facilitates": "helps", "commence": "start", "terminate": "end",
+    "endeavor": "try", "endeavour": "try", "ascertain": "find out",
+    "aforementioned": "above", "heretofore": "until now", "thereof": "of it",
+    "herein": "here", "whilst": "while", "amongst": "among",
+    "in order to": "to", "due to the fact that": "because",
+    "for the purpose of": "to", "in the event that": "if",
+    "at this point in time": "now", "prior to": "before",
+    "subsequent to": "after", "with regard to": "about",
+    "in terms of": "in", "a number of": "several",
+    "the vast majority of": "most",
+}
+
+
+def _phrase_hits(text, phrases, lineno, category, out):
+    low = text.lower()
+    for ph in phrases:
+        p = ph.lower()
+        pat = r"(?<![a-z])" + re.escape(p) + r"(?![a-z])"
+        for _ in re.finditer(pat, low):
+            sug = REPLACE.get(p)
+            sug = f"Use '{sug}' instead." if sug else SUGGEST[category]
+            out.append((lineno, category, ph, sug))
+
+
+def diagnostics(text):
+    """Per-line findings: list of (line, category, match, suggestion).
+
+    Reads the original text, so line numbers match the editor. Skips
+    frontmatter, fences, ignored regions, comments; strips inline markup.
+    """
+    out = []
+    lines = text.split("\n")
+    in_fm = bool(FRONTMATTER_RE.match(text))
+    fm_end = 0
+    if in_fm:
+        m = re.search(r"\r?\n---\r?\n", text[4:])
+        if m:
+            fm_end = text[:].count("\n", 0, 4 + m.end())
+    in_fence = in_ignore = False
+    para_start, para_sents = None, 0
+    for i, line in enumerate(lines, 1):
+        if i <= fm_end:
+            continue
+        s = line.strip()
+        if s.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if re.search(r"<!--\s*anti-slop:\s*off\s*-->", s, re.I):
+            in_ignore = True
+            continue
+        if re.search(r"<!--\s*anti-slop:\s*on\s*-->", s, re.I):
+            in_ignore = False
+            continue
+        if in_ignore or re.fullmatch(r"<!--.*-->", s):
+            continue
+        s = INLINE_CODE_RE.sub(" ", s)
+        s = MD_IMAGE_RE.sub(" ", s)
+        s = MD_LINK_RE.sub(r"\1", s)
+        s = BARE_URL_RE.sub(" ", s)
+        s = re.sub(r"^\s*#{1,6}\s*", "", s)
+        s = re.sub(r"^\s*(?:[-*+\u2022]|\d+[.)])\s+", "", s)
+        if not s:
+            if para_start is not None and para_sents > 6:
+                out.append((para_start, "long_paragraph(>6s)",
+                            f"{para_sents} sentences", SUGGEST["long_paragraph(>6s)"]))
+            para_start, para_sents = None, 0
+            continue
+        if para_start is None:
+            para_start = i
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", s) if p.strip()]
+        para_sents += len(parts)
+        for p in parts:
+            if wc(p) > 20:
+                out.append((i, "long_sentence(>20w)",
+                            f"{wc(p)} words: " + (p[:47] + "..." if len(p) > 50 else p),
+                            SUGGEST["long_sentence(>20w)"]))
+        for _ in re.finditer(";", s):
+            out.append((i, "semicolon", ";", SUGGEST["semicolon"]))
+        for cre, cat in ((CONTRACTION_RE, "contraction"), (PASSIVE_RE, "passive_voice"),
+                         (ING_MAIN_RE, "ing_main_verb"), (NOMINAL_RE, "nominalization"),
+                         (MODAL_RE, "modal_hedge")):
+            for m in cre.finditer(s):
+                out.append((i, cat, m.group(0), SUGGEST[cat]))
+        _phrase_hits(s, BANNED, i, "banned_word", out)
+        _phrase_hits(s, MARKETING, i, "marketing_adjective", out)
+        _phrase_hits(s, AI_SLOP, i, "ai_slop", out)
+        _phrase_hits(s, HEDGE, i, "modal_hedge", out)
+    if para_start is not None and para_sents > 6:
+        out.append((para_start, "long_paragraph(>6s)",
+                    f"{para_sents} sentences", SUGGEST["long_paragraph(>6s)"]))
+    out.sort(key=lambda d: (d[0], d[1]))
+    return out
+
+
+def _gh_escape(v):
+    return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def report(name, r, as_json, max_score, explain=False, fmt="text", text=None):
     if as_json:
         print(json.dumps({name: r}, ensure_ascii=False, indent=2))
     else:
         print(f"{os.path.basename(name):28} words={r['words']:5d} "
               f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
               f"maxsent={r['longest_sentence_words']:3d}")
+    if text is not None and fmt == "github" and not as_json:
+        for line, cat, match, sug in diagnostics(text):
+            print(f"::warning file={name},line={line},title={cat}::"
+                  f"{_gh_escape(match)} -- {_gh_escape(sug)}")
+    elif text is not None and explain and not as_json:
+        for line, cat, match, sug in diagnostics(text):
+            print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
     if max_score is not None and r["total_per100w"] > max_score:
         print(f"FAIL {name}: {r['total_per100w']:.2f} per 100 words "
               f"is above the limit of {max_score:.2f}", file=sys.stderr)
@@ -198,7 +324,7 @@ def report(name, r, as_json, max_score):
     return 0
 
 
-def run(files, as_json=False, max_score=None):
+def run(files, as_json=False, max_score=None, explain=False, fmt="text"):
     if not files:
         return report("<stdin>", lint(sys.stdin.read()), True, max_score)
     expanded = []
@@ -212,17 +338,31 @@ def run(files, as_json=False, max_score=None):
         except OSError as exc:
             print(f"ERROR {f}: {exc}", file=sys.stderr)
             return 2
-        failed += report(f, lint(text), as_json, max_score)
+        failed += report(f, lint(text), as_json, max_score,
+                         explain, fmt, text)
     return 1 if failed else 0
 
 
 def main(argv):
-    as_json, max_score, files = False, None, []
+    as_json, max_score, explain, fmt, files = False, None, False, "text", []
     i = 0
     while i < len(argv):
         a = argv[i]
         if a == "--json":
             as_json = True
+        elif a == "--explain":
+            explain = True
+        elif a == "--format":
+            i += 1
+            if i >= len(argv) or argv[i] not in ("text", "github"):
+                print("ERROR: --format needs text or github", file=sys.stderr)
+                return 2
+            fmt = argv[i]
+        elif a.startswith("--format="):
+            fmt = a.split("=", 1)[1]
+            if fmt not in ("text", "github"):
+                print(f"ERROR: unknown format {fmt}", file=sys.stderr)
+                return 2
         elif a == "--max":
             i += 1
             if i >= len(argv):
@@ -240,7 +380,7 @@ def main(argv):
         else:
             files.append(a)
         i += 1
-    return run(files, as_json, max_score)
+    return run(files, as_json, max_score, explain, fmt)
 
 
 if __name__ == "__main__":

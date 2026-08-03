@@ -11,6 +11,8 @@ Usage:
     python3 ru-ste-lint.py --max 5 docs/*.md   # exit 1 if a file scores above 5
     cat draft.md | python3 ru-ste-lint.py
     python3 ru-ste-lint.py --json draft.md
+    python3 ru-ste-lint.py --explain draft.md   # per-line findings with fixes
+    python3 ru-ste-lint.py --format github --max 5 docs/*.md   # CI annotations
 
 Exit codes:
     0 - every file is at or below the threshold (or no threshold was given)
@@ -210,13 +212,143 @@ def lint(text):
     }
 
 
-def report(name, r, as_json, max_score):
+SUGGEST = {
+    "long_sentence(>20w)": "Разбейте на фразы до 20 слов.",
+    "semicolon": "Поставьте точку. Одна фраза — одна мысль.",
+    "passive_reflexive": "Назовите исполнителя. Активный залог.",
+    "passive_short": "Назовите исполнителя. Активный залог.",
+    "participle": "Замените причастие на глагол или придаточное.",
+    "gerund": "Замените деепричастие на второе сказуемое.",
+    "nominalization": "Используйте глагол вместо отглагольного существительного.",
+    "noun_chain(3+)": "Разорвите цепочку родительных падежей.",
+    "clerical": "Уберите канцелярит. Напишите просто.",
+    "marketing": "Удалите или дайте цифру, которая это доказывает.",
+    "ai_slop": "Удалите штамп.",
+    "hedge": "Сформулируйте факт или условие.",
+    "long_paragraph(>6s)": "Разбейте абзац: не более 6 фраз.",
+}
+
+REPLACE = {
+    "осуществлять": "делать", "осуществляется": "идёт",
+    "осуществление": "работа", "является": "— (тире или прямое сказуемое)",
+    "являются": "— (тире или прямое сказуемое)",
+    "представляет собой": "— (тире)", "в целях": "чтобы",
+    "с целью": "чтобы", "для того чтобы": "чтобы",
+    "в случае если": "если", "в случае, если": "если",
+    "при наличии": "если есть", "при отсутствии": "если нет",
+    "в настоящее время": "сейчас", "на сегодняшний день": "сейчас",
+    "в данный момент": "сейчас", "данный": "этот",
+    "данного": "этого", "данной": "этой",
+    "вышеуказанный": "названный выше", "путем": "через",
+    "путём": "через", "посредством": "через",
+    "ввиду того что": "потому что", "в связи с тем что": "потому что",
+    "производить": "делать", "реализовывать": "делать",
+}
+
+
+def _phrase_hits(text, phrases, lineno, category, out):
+    low = text.lower().replace("ё", "е")
+    for ph in phrases:
+        p = ph.lower().replace("ё", "е")
+        pat = r"(?<![а-яa-z])" + re.escape(p) + r"(?![а-яa-z])"
+        for _ in re.finditer(pat, low):
+            rep = REPLACE.get(p)
+            sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
+            out.append((lineno, category, ph, sug))
+
+
+def diagnostics(text):
+    """Per-line findings: list of (line, category, match, suggestion).
+
+    Reads the original text, so line numbers match the editor. Skips
+    frontmatter, fences, ignored regions, comments; strips inline markup.
+    """
+    out = []
+    lines = text.split("\n")
+    fm_end = 0
+    if FRONTMATTER_RE.match(text):
+        m = re.search(r"\r?\n---\r?\n", text[4:])
+        if m:
+            fm_end = text.count("\n", 0, 4 + m.end())
+    in_fence = in_ignore = False
+    para_start, para_sents = None, 0
+    for i, line in enumerate(lines, 1):
+        if i <= fm_end:
+            continue
+        s = line.strip()
+        if s.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if re.search(r"<!--\s*anti-slop:\s*off\s*-->", s, re.I):
+            in_ignore = True
+            continue
+        if re.search(r"<!--\s*anti-slop:\s*on\s*-->", s, re.I):
+            in_ignore = False
+            continue
+        if in_ignore or re.fullmatch(r"<!--.*-->", s):
+            continue
+        s = INLINE_CODE_RE.sub(" ", s)
+        s = MD_IMAGE_RE.sub(" ", s)
+        s = MD_LINK_RE.sub(r"\1", s)
+        s = BARE_URL_RE.sub(" ", s)
+        s = re.sub(r"^\s*#{1,6}\s*", "", s)
+        s = re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", s)
+        if not s:
+            if para_start is not None and para_sents > 6:
+                out.append((para_start, "long_paragraph(>6s)",
+                            f"{para_sents} фраз", SUGGEST["long_paragraph(>6s)"]))
+            para_start, para_sents = None, 0
+            continue
+        if para_start is None:
+            para_start = i
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", s) if p.strip()]
+        para_sents += len(parts)
+        for p in parts:
+            if wc(p) > 20:
+                out.append((i, "long_sentence(>20w)",
+                            f"{wc(p)} слов: " + (p[:47] + "..." if len(p) > 50 else p),
+                            SUGGEST["long_sentence(>20w)"]))
+        for _ in re.finditer(";", s):
+            out.append((i, "semicolon", ";", SUGGEST["semicolon"]))
+        for cre, cat in ((PASSIVE_RE, "passive_reflexive"),
+                         (SHORT_PASSIVE_RE, "passive_short"),
+                         (PARTICIPLE_RE, "participle"),
+                         (GERUND_RE, "gerund"),
+                         (NOMINAL_RE, "nominalization"),
+                         (GEN_NOUN_RE, "noun_chain(3+)")):
+            for m in cre.finditer(s):
+                out.append((i, cat, m.group(0), SUGGEST[cat]))
+        _phrase_hits(s, CLERICAL, i, "clerical", out)
+        _phrase_hits(s, MARKETING, i, "marketing", out)
+        _phrase_hits(s, AI_SLOP, i, "ai_slop", out)
+        _phrase_hits(s, HEDGE, i, "hedge", out)
+    if para_start is not None and para_sents > 6:
+        out.append((para_start, "long_paragraph(>6s)",
+                    f"{para_sents} фраз", SUGGEST["long_paragraph(>6s)"]))
+    out.sort(key=lambda d: (d[0], d[1]))
+    return out
+
+
+def _gh_escape(v):
+    return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def report(name, r, as_json, max_score, explain=False, fmt="text", text=None):
     if as_json:
         print(json.dumps({name: r}, ensure_ascii=False, indent=2))
     else:
         print(f"{os.path.basename(name):28} words={r['words']:5d} "
               f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
               f"maxsent={r['longest_sentence_words']:3d}")
+    if text is not None and fmt == "github" and not as_json:
+        for line, cat, match, sug in diagnostics(text):
+            print(f"::warning file={name},line={line},title={cat}::"
+                  f"{_gh_escape(match)} -- {_gh_escape(sug)}")
+    elif text is not None and explain and not as_json:
+        for line, cat, match, sug in diagnostics(text):
+            print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
     if max_score is not None and r["total_per100w"] > max_score:
         print(f"FAIL {name}: {r['total_per100w']:.2f} per 100 words "
               f"is above the limit of {max_score:.2f}", file=sys.stderr)
@@ -224,7 +356,7 @@ def report(name, r, as_json, max_score):
     return 0
 
 
-def run(files, as_json=False, max_score=None):
+def run(files, as_json=False, max_score=None, explain=False, fmt="text"):
     if not files:
         return report("<stdin>", lint(sys.stdin.read()), True, max_score)
     expanded = []
@@ -238,17 +370,31 @@ def run(files, as_json=False, max_score=None):
         except OSError as exc:
             print(f"ERROR {f}: {exc}", file=sys.stderr)
             return 2
-        failed += report(f, lint(text), as_json, max_score)
+        failed += report(f, lint(text), as_json, max_score,
+                         explain, fmt, text)
     return 1 if failed else 0
 
 
 def main(argv):
-    as_json, max_score, files = False, None, []
+    as_json, max_score, explain, fmt, files = False, None, False, "text", []
     i = 0
     while i < len(argv):
         a = argv[i]
         if a == "--json":
             as_json = True
+        elif a == "--explain":
+            explain = True
+        elif a == "--format":
+            i += 1
+            if i >= len(argv) or argv[i] not in ("text", "github"):
+                print("ERROR: --format needs text or github", file=sys.stderr)
+                return 2
+            fmt = argv[i]
+        elif a.startswith("--format="):
+            fmt = a.split("=", 1)[1]
+            if fmt not in ("text", "github"):
+                print(f"ERROR: unknown format {fmt}", file=sys.stderr)
+                return 2
         elif a == "--max":
             i += 1
             if i >= len(argv):
@@ -266,7 +412,7 @@ def main(argv):
         else:
             files.append(a)
         i += 1
-    return run(files, as_json, max_score)
+    return run(files, as_json, max_score, explain, fmt)
 
 
 if __name__ == "__main__":
