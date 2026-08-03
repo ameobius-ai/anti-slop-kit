@@ -111,6 +111,49 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
 
 
+class EnglishSpansAreChargedOnce(unittest.TestCase):
+    """One span, one violation, even when a short entry sits inside a long one.
+
+    The lists do not carry a nested pair yet. These tests pin the mechanism
+    now, so adding 'delve' next to 'delve into' cannot start double-counting.
+    """
+
+    def test_longest_phrase_wins(self):
+        hits = en.phrase_matches("Let us delve into the data.",
+                                 ["delve", "delve into"])
+        self.assertEqual([ph for ph, _ in hits], ["delve into"])
+
+    def test_each_occurrence_still_counts(self):
+        n, hits = en.count_phrases("Delve into logs and delve into traces.",
+                                   ["delve", "delve into"])
+        self.assertEqual((n, hits), (2, ["delve into", "delve into"]))
+
+    def test_word_boundaries_still_hold(self):
+        for text in ("The delved report.", "An undelve step."):
+            self.assertEqual(en.count_phrases(text, ["delve"])[0], 0, text)
+
+    def test_hits_come_back_in_reading_order(self):
+        n, hits = en.count_phrases("Alpha then zebra.", ["zebra", "alpha"])
+        self.assertEqual((n, hits), (2, ["alpha", "zebra"]))
+
+    def test_a_long_phrase_keeps_its_own_suggestion(self):
+        out = []
+        en._phrase_hits("We utilize a comprehensive solution.",
+                        ["utilize", "comprehensive solution"], 1,
+                        "banned_word", out)
+        self.assertEqual([m for _, _, m, _ in out],
+                         ["utilize", "comprehensive solution"])
+
+    def test_real_lists_do_not_double_charge_the_samples(self):
+        for rel in ("en/samples/baseline.md", "en/samples/ste.md"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            for name in ("BANNED", "MARKETING", "AI_SLOP", "HEDGE"):
+                spans = [sp for _, sp in
+                         en.phrase_matches(text, getattr(en, name))]
+                self.assertEqual(len(spans), len(set(spans)),
+                                 "%s repeats a span in %s" % (name, rel))
+
+
 class RussianRules(unittest.TestCase):
     def test_clerical(self):
         r = ru.lint("В целях проверки откройте файл.")
