@@ -90,6 +90,13 @@ PARTICIPLE_RE = re.compile(
     r"нный|нная|нное|нные|нных|нным|нного|емый|емая|емые|емых|имый|имая|имые)\b",
     re.I)
 
+# Лексикализованные прилагательные на -щий, а не причастия (issue #14):
+# «следующий раздел» не образовано от глагола в контексте документации.
+PARTICIPLE_STOP = (
+    "следующ", "соответствующ", "настоящ", "подходящ", "существующ",
+    "вышеупомянут", "нижеследующ",
+)
+
 # gerunds
 GERUND_RE = re.compile(
     r"\b[а-яё]{3,}(?:ывая|ивая|уя|юя|авши|ивши|вшись|ясь|аясь|уясь)\b", re.I)
@@ -169,6 +176,12 @@ def count_phrases(text, phrases):
     return n, hits
 
 
+def _participle_count(text):
+    """Participle matches minus lexicalized -щий adjectives (issue #14)."""
+    return sum(1 for m in PARTICIPLE_RE.finditer(text)
+               if not m.group(0).lower().startswith(PARTICIPLE_STOP))
+
+
 def lint(text):
     text = preprocess(text)
     sents = sentences(text)
@@ -179,7 +192,7 @@ def lint(text):
     v["semicolon"] = text.count(";")
     v["passive_reflexive"] = len(PASSIVE_RE.findall(text))
     v["passive_short"] = len(SHORT_PASSIVE_RE.findall(text))
-    v["participle"] = len(PARTICIPLE_RE.findall(text))
+    v["participle"] = _participle_count(text)
     v["gerund"] = len(GERUND_RE.findall(text))
     v["nominalization"] = len(NOMINAL_RE.findall(text))
     v["noun_chain(3+)"] = len(GEN_NOUN_RE.findall(text))
@@ -319,6 +332,9 @@ def diagnostics(text):
                          (NOMINAL_RE, "nominalization"),
                          (GEN_NOUN_RE, "noun_chain(3+)")):
             for m in cre.finditer(s):
+                if (cre is PARTICIPLE_RE
+                        and m.group(0).lower().startswith(PARTICIPLE_STOP)):
+                    continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
         _phrase_hits(s, CLERICAL, i, "clerical", out)
         _phrase_hits(s, MARKETING, i, "marketing", out)
