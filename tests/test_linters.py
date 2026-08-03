@@ -56,6 +56,24 @@ class EnglishRules(unittest.TestCase):
         r = en.lint("The parser reads the file and writes a report.")
         self.assertEqual(r["violations"]["passive_voice"], 0)
 
+    def test_ing_opener_stoplist(self):
+        """Issue #13: sentence-initial -ing words that are not participles."""
+        for text in ("Bring the file to the node.",
+                     "During the meeting, write notes.",
+                     "Something went wrong. Check the log."):
+            self.assertEqual(en.lint(text)["violations"]["ing_main_verb"], 0)
+
+    def test_ing_opener_true_positive(self):
+        r = en.lint("Using the cache, write the key.")
+        self.assertGreaterEqual(r["violations"]["ing_main_verb"], 1)
+
+    def test_ing_stoplist_keeps_diagnostics_in_sync(self):
+        text = "Bring the file. Something went wrong. Using the cache, write it."
+        total = en.lint(text)["violations"]["ing_main_verb"]
+        diags = [d for d in en.diagnostics(text) if d[1] == "ing_main_verb"]
+        self.assertEqual(total, 1)  # only "Using" survives the stoplist
+        self.assertEqual(len(diags), total)
+
 
 class EnglishMarkupIsNotProse(unittest.TestCase):
     def test_code_fence_ignored(self):
@@ -91,6 +109,49 @@ class EnglishMarkupIsNotProse(unittest.TestCase):
         r = en.lint(text)
         self.assertEqual(r["violations"]["banned_word"], 0)
         self.assertEqual(r["violations"]["marketing_adjective"], 0)
+
+
+class EnglishSpansAreChargedOnce(unittest.TestCase):
+    """One span, one violation, even when a short entry sits inside a long one.
+
+    The lists do not carry a nested pair yet. These tests pin the mechanism
+    now, so adding 'delve' next to 'delve into' cannot start double-counting.
+    """
+
+    def test_longest_phrase_wins(self):
+        hits = en.phrase_matches("Let us delve into the data.",
+                                 ["delve", "delve into"])
+        self.assertEqual([ph for ph, _ in hits], ["delve into"])
+
+    def test_each_occurrence_still_counts(self):
+        n, hits = en.count_phrases("Delve into logs and delve into traces.",
+                                   ["delve", "delve into"])
+        self.assertEqual((n, hits), (2, ["delve into", "delve into"]))
+
+    def test_word_boundaries_still_hold(self):
+        for text in ("The delved report.", "An undelve step."):
+            self.assertEqual(en.count_phrases(text, ["delve"])[0], 0, text)
+
+    def test_hits_come_back_in_reading_order(self):
+        n, hits = en.count_phrases("Alpha then zebra.", ["zebra", "alpha"])
+        self.assertEqual((n, hits), (2, ["alpha", "zebra"]))
+
+    def test_a_long_phrase_keeps_its_own_suggestion(self):
+        out = []
+        en._phrase_hits("We utilize a comprehensive solution.",
+                        ["utilize", "comprehensive solution"], 1,
+                        "banned_word", out)
+        self.assertEqual([m for _, _, m, _ in out],
+                         ["utilize", "comprehensive solution"])
+
+    def test_real_lists_do_not_double_charge_the_samples(self):
+        for rel in ("en/samples/baseline.md", "en/samples/ste.md"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            for name in ("BANNED", "MARKETING", "AI_SLOP", "HEDGE"):
+                spans = [sp for _, sp in
+                         en.phrase_matches(text, getattr(en, name))]
+                self.assertEqual(len(spans), len(set(spans)),
+                                 "%s repeats a span in %s" % (name, rel))
 
 
 class RussianRules(unittest.TestCase):
@@ -142,6 +203,276 @@ class RussianRules(unittest.TestCase):
         r = ru.lint(text)
         self.assertEqual(r["violations"]["clerical"], 0)
         self.assertEqual(r["violations"]["marketing"], 0)
+
+    def test_participle_stoplist(self):
+        """Issue #14: lexicalized -щий adjectives are not participles."""
+        for text in ("Откройте следующий файл.",
+                     "См. соответствующий раздел.",
+                     "Установите подходящий драйвер.",
+                     "Обновите существующий узел."):
+            self.assertEqual(ru.lint(text)["violations"]["participle"], 0)
+
+    def test_participle_stoplist_keeps_diagnostics_in_sync(self):
+        text = "Откройте следующий файл. Сервис, позволяющий читать файлы."
+        total = ru.lint(text)["violations"]["participle"]
+        diags = [d for d in ru.diagnostics(text) if d[1] == "participle"]
+        self.assertEqual(total, 1)  # only «позволяющий» survives
+        self.assertEqual(len(diags), total)
+
+
+class RussianSpansAreChargedOnce(unittest.TestCase):
+    """Issue #18: one span on the page is one violation in the report."""
+
+    def test_yo_pair_counts_once(self):
+        """«путем» и «путём» лежали в списке оба, но это одно слово."""
+        for text in ("Данные передаются путём шифрования.",
+                     "Данные передаются путем шифрования."):
+            self.assertEqual(ru.lint(text)["violations"]["clerical"], 1)
+
+    def test_marketing_yo_pair_counts_once(self):
+        self.assertEqual(
+            ru.lint("Это надёжное решение.")["violations"]["marketing"], 1)
+
+    def test_nested_phrase_counts_once(self):
+        """«данный» внутри «в данный момент» — один штамп, не два."""
+        self.assertEqual(
+            ru.lint("В данный момент сервис недоступен.")[
+                "violations"]["clerical"], 1)
+
+    def test_nested_ai_slop_counts_once(self):
+        self.assertEqual(
+            ru.lint("Давайте погрузимся в тему.")["violations"]["ai_slop"], 1)
+
+    def test_longer_phrase_wins_the_span(self):
+        """Побеждать должна длинная фраза: у неё точнее подсказка."""
+        hits = [ph for ph, _ in ru.phrase_matches(
+            "В данный момент сервис недоступен.", ru.CLERICAL)]
+        self.assertEqual(hits, ["в данный момент"])
+
+    def test_separate_spans_still_both_count(self):
+        """Фикс гасит двойной счёт, а не второе вхождение."""
+        r = ru.lint("В данный момент так. Настройка путём замены.")
+        self.assertEqual(r["violations"]["clerical"], 2)
+
+    def test_diagnostics_agree_with_the_count(self):
+        text = "В данный момент данные передаются путём шифрования."
+        total = ru.lint(text)["violations"]["clerical"]
+        diags = [d for d in ru.diagnostics(text) if d[1] == "clerical"]
+        self.assertEqual(len(diags), total)
+
+
+class SpansAreChargedOnceAcrossLists(unittest.TestCase):
+    """One span belongs to one list, even when two lists could claim it.
+
+    phrase_matches() guards a single list at a time. These tests pin the
+    wider invariant (issue #21), so #11 can put 'delve' in BANNED while
+    'delve into' stays in AI_SLOP without charging the reader twice.
+    The pairs below are injected rather than real: no phrase in the
+    shipped lists is nested inside a phrase from another list today.
+    """
+
+    def _with_extra(self, mod, category, phrase):
+        return tuple((c, (list(ph) + [phrase]) if c == category else ph)
+                     for c, ph in mod.PHRASE_GROUPS)
+
+    def test_en_long_phrase_wins_over_a_short_one_from_another_list(self):
+        groups = self._with_extra(en, "banned_word", "delve")
+        hits = en.categorised_matches("We delve into the logs.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("ai_slop", "delve into")])
+
+    def test_en_short_word_still_fires_on_its_own(self):
+        groups = self._with_extra(en, "banned_word", "delve")
+        hits = en.categorised_matches("We delve deeper.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("banned_word", "delve")])
+
+    def test_ru_long_phrase_wins_over_a_short_one_from_another_list(self):
+        groups = self._with_extra(ru, "hedge", "разберемся")
+        hits = ru.categorised_matches("Давайте разберёмся с логами.", groups)
+        self.assertEqual([c for c, _, _ in hits], ["ai_slop"])
+
+    def test_ru_short_word_still_fires_on_its_own(self):
+        groups = self._with_extra(ru, "hedge", "разберемся")
+        hits = ru.categorised_matches("Разберёмся с логами.", groups)
+        self.assertEqual([c for c, _, _ in hits], ["hedge"])
+
+    def test_a_tie_goes_to_the_earlier_list(self):
+        groups = (("banned_word", ["robust"]),
+                  ("marketing_adjective", ["robust"]))
+        hits = en.categorised_matches("A robust API.", groups)
+        self.assertEqual([(c, p) for c, p, _ in hits],
+                         [("banned_word", "robust")])
+
+    def test_no_phrase_lives_in_two_lists(self):
+        for mod, fold in ((en, lambda s: s.lower()), (ru, ru._fold)):
+            seen = {}
+            for cat, phrases in mod.PHRASE_GROUPS:
+                for ph in phrases:
+                    seen.setdefault(fold(ph), []).append(cat)
+            dupes = {p: c for p, c in seen.items() if len(c) > 1}
+            self.assertEqual(dupes, {}, "a phrase sits in two lists: %s" % dupes)
+
+    def test_hits_come_back_in_reading_order(self):
+        groups = (("banned_word", ["whilst"]), ("marketing_adjective", ["robust"]))
+        hits = en.categorised_matches("A robust API, whilst small.", groups)
+        self.assertEqual([p for _, p, _ in hits], ["robust", "whilst"])
+
+    def test_lint_and_diagnostics_agree_on_the_samples(self):
+        pairs = ((en, "en/samples/baseline.md",
+                  ("banned_word", "marketing_adjective", "ai_slop")),
+                 (en, "en/samples/ste.md",
+                  ("banned_word", "marketing_adjective", "ai_slop")),
+                 (ru, "ru/samples/baseline.md",
+                  ("clerical", "marketing", "ai_slop", "hedge")),
+                 (ru, "ru/samples/utr.md",
+                  ("clerical", "marketing", "ai_slop", "hedge")))
+        for mod, rel, cats in pairs:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            counts = mod.lint(text)["violations"]
+            diags = mod.diagnostics(text)
+            for cat in cats:
+                self.assertEqual(sum(1 for d in diags if d[1] == cat),
+                                 counts[cat], "%s %s" % (rel, cat))
+
+
+class LexiconAdditions(unittest.TestCase):
+    """Issues #11 and #12: the words the lists were missing.
+
+    Three of the new English entries are nested inside phrases that were
+    already there, so these tests double as the payoff for #21: the words
+    fire on their own, and stay silent where a longer phrase already
+    covers the span.
+    """
+
+    EN_VERBS = (("The team utilized a cache.", "utilized", "used"),
+                ("We leveraged the queue.", "leveraged", "used"),
+                ("This showcases the parser.", "showcases", "shows"),
+                ("It empowers the operator.", "empowers", "lets"),
+                ("We embark on the migration.", "embark", "start"))
+
+    def test_en_new_verbs_are_flagged_and_carry_a_replacement(self):
+        for text, word, replacement in self.EN_VERBS:
+            self.assertEqual(en.lint(text)["violations"]["banned_word"], 1, text)
+            sug = [d[3] for d in en.diagnostics(text) if d[2] == word]
+            self.assertEqual(sug, ["Use '%s' instead." % replacement], text)
+
+    def test_en_new_puffer_adjectives_are_flagged(self):
+        for text in ("A comprehensive rewrite.", "A plethora of options.",
+                     "A myriad of flags.", "The tool boasts three modes.",
+                     "A meticulously tuned index."):
+            self.assertEqual(
+                en.lint(text)["violations"]["marketing_adjective"], 1, text)
+
+    def test_en_new_openers_are_flagged(self):
+        for text in ("In today's world, cache everything.",
+                     "At its core, the parser is a loop.",
+                     "Look no further than the log."):
+            self.assertEqual(en.lint(text)["violations"]["ai_slop"], 1, text)
+
+    def test_a_new_short_word_does_not_double_charge_a_longer_phrase(self):
+        """The reason #21 had to land before these words could be added."""
+        for text, category, phrase in (
+                ("We delve into the logs.", "ai_slop", "delve into"),
+                ("This will unlock the power of caching.",
+                 "marketing_adjective", "unlock the power"),
+                ("In today's fast-paced world, cache.",
+                 "ai_slop", "in today's fast-paced world"),
+                ("A comprehensive solution ships.",
+                 "marketing_adjective", "comprehensive solution")):
+            hits = [(c, p) for c, p, _ in en.categorised_matches(text)]
+            self.assertEqual(hits, [(category, phrase)], text)
+
+    def test_the_same_short_words_still_fire_alone(self):
+        for text, category, phrase in (
+                ("We delve deeper.", "banned_word", "delve"),
+                ("Unlock the door.", "banned_word", "unlock"),
+                ("A fast-paced release train.",
+                 "marketing_adjective", "fast-paced")):
+            hits = [(c, p) for c, p, _ in en.categorised_matches(text)]
+            self.assertEqual(hits, [(category, phrase)], text)
+
+    def test_absorbed_words_add_nothing_to_the_baseline_sample(self):
+        """In the sample these three sit inside longer phrases already flagged."""
+        text = (ROOT / "en/samples/baseline.md").read_text(encoding="utf-8")
+        found = {p for _, p, _ in en.categorised_matches(text)}
+        for word in ("unlock", "fast-paced", "comprehensive"):
+            self.assertNotIn(word, found)
+
+    def test_ru_new_clerical_entries(self):
+        for text in ("Нужно произвести настройку.",
+                     "Следует осуществить проверку.",
+                     "В настоящий момент узел недоступен."):
+            self.assertEqual(ru.lint(text)["violations"]["clerical"], 1, text)
+
+    def test_ru_new_marketing_and_hedge_entries(self):
+        self.assertEqual(
+            ru.lint("Сделаем в кратчайшие сроки.")["violations"]["marketing"], 1)
+        for text in ("На самом деле кэш пуст.", "Это своего рода очередь."):
+            self.assertEqual(ru.lint(text)["violations"]["hedge"], 1, text)
+
+    def test_ru_replacements_are_offered(self):
+        for text, word, replacement in (
+                ("Нужно произвести настройку.", "произвести", "сделать"),
+                ("В настоящий момент узел недоступен.",
+                 "в настоящий момент", "сейчас")):
+            sug = [d[3] for d in ru.diagnostics(text) if d[2] == word]
+            self.assertEqual(sug, ["Напишите «%s»." % replacement], text)
+
+    def test_clean_samples_stay_clean(self):
+        """New entries must not fire on the prose we hold up as the target."""
+        for mod, rel in ((en, "en/samples/ste.md"), (ru, "ru/samples/utr.md")):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertEqual(
+                [p for _, p, _ in mod.categorised_matches(text)], [], rel)
+
+
+class LexiconIntegrity(unittest.TestCase):
+    """Guard the lists themselves, so a bad entry fails at edit time."""
+
+    RU_LISTS = ("CLERICAL", "MARKETING", "AI_SLOP", "HEDGE")
+    EN_LISTS = ("BANNED", "MARKETING", "AI_SLOP", "HEDGE")
+
+    def test_ru_has_no_entry_duplicated_by_yo_folding(self):
+        """Обе орфографии одной фразы — мёртвый вес после сворачивания ё."""
+        for name in self.RU_LISTS:
+            folded = [ru._fold(p) for p in getattr(ru, name)]
+            dupes = sorted({p for p in folded if folded.count(p) > 1})
+            self.assertEqual(dupes, [], "%s carries both spellings of %s" % (name, dupes))
+
+    def test_en_has_no_duplicate_entries(self):
+        for name in self.EN_LISTS:
+            lowered = [p.lower() for p in getattr(en, name)]
+            dupes = sorted({p for p in lowered if lowered.count(p) > 1})
+            self.assertEqual(dupes, [], "%s repeats %s" % (name, dupes))
+
+    def test_no_source_file_carries_a_replacement_character(self):
+        """U+FFFD means a byte was lost in an edit and a rule silently died.
+
+        A corrupted REPLACE key still parses, still passes every other
+        test, and quietly stops offering its suggestion. Only a byte-level
+        check catches it.
+        """
+        for rel in ("en/ste-lint.py", "ru/ru-ste-lint.py",
+                    "tests/test_linters.py", "evals/score.py", "evals/run.py"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertEqual(text.count("\ufffd"), 0, rel)
+
+    def test_every_replacement_key_is_a_real_lexicon_entry(self):
+        """A REPLACE key that matches nothing can never be shown."""
+        for mod, lists, fold in (
+                (en, self.EN_LISTS, lambda s: s.lower()),
+                (ru, self.RU_LISTS, ru._fold)):
+            entries = {fold(p) for name in lists for p in getattr(mod, name)}
+            orphans = sorted(k for k in mod.REPLACE if fold(k) not in entries)
+            self.assertEqual(orphans, [], "unreachable REPLACE keys: %s" % orphans)
+
+    def test_en_prefix_overlaps_do_not_double_count(self):
+        """EN опирается на lookaround: следим, что это так и осталось."""
+        for text, category in (("The tool facilitates review.", "banned_word"),
+                               ("A seamlessly integrated pipeline.", "marketing_adjective"),
+                               ("Our next-generation platform.", "marketing_adjective")):
+            self.assertEqual(en.lint(text)["violations"][category], 1, text)
 
 
 class SampleRegression(unittest.TestCase):

@@ -42,33 +42,35 @@ CLERICAL = [
     "производить", "производится", "производятся", "реализовывать",
     "реализуется", "обеспечивать", "обеспечивается", "позволяет обеспечить",
     "имеет место", "является", "являются", "являлся", "представляет собой",
-    "путем", "путём", "посредством", "ввиду того что", "с тем чтобы",
+    "путем", "посредством", "ввиду того что", "с тем чтобы",
     "для того чтобы", "необходимо отметить", "следует отметить",
     "стоит отметить", "важно понимать", "важно отметить", "нужно понимать",
     "как известно", "не секрет что", "не секрет, что",
+    "произвести", "осуществить", "нельзя не отметить", "в настоящий момент",
 ]
 
 MARKETING = [
     "инновационный", "инновационное", "инновационная", "уникальный",
     "уникальное", "уникальная", "передовой", "передовые", "передовых",
     "лидирующий", "лидирующие", "ведущий поставщик", "мощный", "мощная",
-    "мощные", "гибкий инструмент", "надежное решение", "надёжное решение",
+    "мощные", "гибкий инструмент", "надежное решение",
     "качественный сервис", "комплексный подход", "индивидуальный подход",
     "команда профессионалов", "широкий спектр", "широкий ассортимент",
     "бесшовный", "бесшовная", "бесшовно", "революционный", "прорывной",
     "первоклассный", "высокотехнологичный", "беспрецедентный",
     "максимально эффективно", "оптимальное решение", "лучшие практики",
+    "в кратчайшие сроки", "мирового уровня",
 ]
 
 AI_SLOP = [
-    "давайте разберемся", "давайте разберёмся", "давайте рассмотрим",
+    "давайте разберемся", "давайте рассмотрим",
     "погрузимся", "давайте погрузимся", "в современном мире",
     "в эпоху цифровизации", "в мире технологий", "отличный вопрос",
     "надеюсь, это помогло", "надеюсь это помогло", "надеюсь, я помог",
     "если коротко", "подводя итог", "в заключение хочется",
     "стоит подчеркнуть", "игра меняется", "меняет правила игры",
     "не просто инструмент", "это не просто", "четко, по делу, без воды",
-    "чётко, по делу, без воды", "без лишней воды", "простыми словами говоря",
+    "без лишней воды", "простыми словами говоря",
 ]
 
 HEDGE = [
@@ -76,6 +78,7 @@ HEDGE = [
     "может быть", "скорее всего", "в некотором смысле", "довольно часто",
     "относительно", "достаточно часто", "в принципе", "по сути",
     "фактически", "в общем-то", "так сказать",
+    "на самом деле", "своего рода", "в плане",
 ]
 
 # verbal-noun suffixes (nominalization)
@@ -89,6 +92,13 @@ PARTICIPLE_RE = re.compile(
     r"ащий|ящий|ящая|ящие|ящих|вший|вшая|вшие|вших|вшего|"
     r"нный|нная|нное|нные|нных|нным|нного|емый|емая|емые|емых|имый|имая|имые)\b",
     re.I)
+
+# Лексикализованные прилагательные на -щий, а не причастия (issue #14):
+# «следующий раздел» не образовано от глагола в контексте документации.
+PARTICIPLE_STOP = (
+    "следующ", "соответствующ", "настоящ", "подходящ", "существующ",
+    "вышеупомянут", "нижеследующ",
+)
 
 # gerunds
 GERUND_RE = re.compile(
@@ -158,15 +168,75 @@ def wc(s):
     return len(WORD_RE.findall(s))
 
 
+def _fold(s):
+    return s.lower().replace("ё", "е")
+
+
+def phrase_matches(text, phrases):
+    """Return [(phrase, span)], charging each span once (issue #18).
+
+    Two lexicon entries can cover the same span: the lists carry both
+    spellings of a yo-phrase, which the folding above makes identical, and
+    they carry short phrases nested inside longer ones. Matching
+    longest-first and skipping a span already taken keeps one span worth
+    one violation.
+    """
+    low = _fold(text)
+    found, taken = [], []
+    for ph in sorted(phrases, key=len, reverse=True):
+        pat = r"(?<![а-яa-z])" + re.escape(_fold(ph)) + r"(?![а-яa-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((ph, (start, end)))
+    found.sort(key=lambda f: f[1][0])
+    return found
+
+
 def count_phrases(text, phrases):
-    low = text.lower().replace("ё", "е")
-    n, hits = 0, []
-    for ph in phrases:
-        p = ph.lower().replace("ё", "е")
-        for _ in re.finditer(r"(?<![а-яa-z])" + re.escape(p) + r"(?![а-яa-z])", low):
-            n += 1
-            hits.append(ph)
-    return n, hits
+    hits = [ph for ph, _ in phrase_matches(text, phrases)]
+    return len(hits), hits
+
+
+PHRASE_GROUPS = (
+    ("clerical", CLERICAL),
+    ("marketing", MARKETING),
+    ("ai_slop", AI_SLOP),
+    ("hedge", HEDGE),
+)
+
+
+def categorised_matches(text, groups=PHRASE_GROUPS):
+    """Return [(category, phrase, span)], one charge per span (issue #21).
+
+    phrase_matches() guards one list at a time, so a short entry in one
+    list and the longer phrase containing it in another would each fire on
+    the same words. Scanning the lists together, longest phrase first,
+    keeps the count honest whichever list an entry sits in. A tie goes to
+    the earlier group; LexiconIntegrity keeps ties hypothetical.
+    """
+    low = _fold(text)
+    pairs = [(cat, ph) for cat, phrases in groups for ph in phrases]
+    pairs.sort(key=lambda cp: len(cp[1]), reverse=True)
+    found, taken = [], []
+    for cat, ph in pairs:
+        pat = r"(?<![а-яa-z])" + re.escape(_fold(ph)) + r"(?![а-яa-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((cat, ph, (start, end)))
+    found.sort(key=lambda f: f[2][0])
+    return found
+
+
+def _participle_count(text):
+    """Participle matches minus lexicalized -щий adjectives (issue #14)."""
+    return sum(1 for m in PARTICIPLE_RE.finditer(text)
+               if not m.group(0).lower().startswith(PARTICIPLE_STOP))
 
 
 def lint(text):
@@ -179,14 +249,18 @@ def lint(text):
     v["semicolon"] = text.count(";")
     v["passive_reflexive"] = len(PASSIVE_RE.findall(text))
     v["passive_short"] = len(SHORT_PASSIVE_RE.findall(text))
-    v["participle"] = len(PARTICIPLE_RE.findall(text))
+    v["participle"] = _participle_count(text)
     v["gerund"] = len(GERUND_RE.findall(text))
     v["nominalization"] = len(NOMINAL_RE.findall(text))
     v["noun_chain(3+)"] = len(GEN_NOUN_RE.findall(text))
-    v["clerical"], ch = count_phrases(text, CLERICAL)
-    v["marketing"], mh = count_phrases(text, MARKETING)
-    v["ai_slop"], ah = count_phrases(text, AI_SLOP)
-    v["hedge"], _ = count_phrases(text, HEDGE)
+    cm = categorised_matches(text)
+    ch = [ph for cat, ph, _ in cm if cat == "clerical"]
+    mh = [ph for cat, ph, _ in cm if cat == "marketing"]
+    ah = [ph for cat, ph, _ in cm if cat == "ai_slop"]
+    v["clerical"] = len(ch)
+    v["marketing"] = len(mh)
+    v["ai_slop"] = len(ah)
+    v["hedge"] = sum(1 for cat, _, _ in cm if cat == "hedge")
 
     paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
@@ -240,21 +314,27 @@ REPLACE = {
     "в данный момент": "сейчас", "данный": "этот",
     "данного": "этого", "данной": "этой",
     "вышеуказанный": "названный выше", "путем": "через",
-    "путём": "через", "посредством": "через",
+    "посредством": "через",
     "ввиду того что": "потому что", "в связи с тем что": "потому что",
     "производить": "делать", "реализовывать": "делать",
+    "произвести": "сделать", "осуществить": "сделать",
+    "в настоящий момент": "сейчас",
 }
 
 
 def _phrase_hits(text, phrases, lineno, category, out):
-    low = text.lower().replace("ё", "е")
-    for ph in phrases:
-        p = ph.lower().replace("ё", "е")
-        pat = r"(?<![а-яa-z])" + re.escape(p) + r"(?![а-яa-z])"
-        for _ in re.finditer(pat, low):
-            rep = REPLACE.get(p)
-            sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
-            out.append((lineno, category, ph, sug))
+    for ph, _span in phrase_matches(text, phrases):
+        rep = REPLACE.get(_fold(ph))
+        sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
+        out.append((lineno, category, ph, sug))
+
+
+def _categorised_hits(text, lineno, out):
+    """Построчные находки по спискам: один спан — одно нарушение."""
+    for cat, ph, _span in categorised_matches(text):
+        rep = REPLACE.get(_fold(ph))
+        sug = f"Напишите «{rep}»." if rep else SUGGEST[cat]
+        out.append((lineno, cat, ph, sug))
 
 
 def diagnostics(text):
@@ -319,11 +399,11 @@ def diagnostics(text):
                          (NOMINAL_RE, "nominalization"),
                          (GEN_NOUN_RE, "noun_chain(3+)")):
             for m in cre.finditer(s):
+                if (cre is PARTICIPLE_RE
+                        and m.group(0).lower().startswith(PARTICIPLE_STOP)):
+                    continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
-        _phrase_hits(s, CLERICAL, i, "clerical", out)
-        _phrase_hits(s, MARKETING, i, "marketing", out)
-        _phrase_hits(s, AI_SLOP, i, "ai_slop", out)
-        _phrase_hits(s, HEDGE, i, "hedge", out)
+        _categorised_hits(s, i, out)
     if para_start is not None and para_sents > 6:
         out.append((para_start, "long_paragraph(>6s)",
                     f"{para_sents} фраз", SUGGEST["long_paragraph(>6s)"]))

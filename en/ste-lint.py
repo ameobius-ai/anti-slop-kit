@@ -39,6 +39,11 @@ BANNED = [
     "prior to", "subsequent to", "with regard to", "in terms of",
     "a number of", "the vast majority of", "it should be noted that",
     "it is important to note", "it is worth noting", "needless to say",
+    "utilizes", "utilized", "utilising", "utilised", "leverages",
+    "leveraged", "delve", "delves", "delved", "delving", "harness",
+    "harnesses", "harnessing", "showcase", "showcases", "showcasing",
+    "unlock", "unlocks", "unlocking", "elevate", "elevates", "elevating",
+    "empower", "empowers", "empowering", "embark", "embarks", "embarking",
 ]
 
 MARKETING = [
@@ -48,6 +53,9 @@ MARKETING = [
     "game-changing", "game changer", "best-in-class", "industry-leading",
     "unparalleled", "unlock the power", "supercharge", "blazing fast",
     "comprehensive solution", "holistic approach", "rich set of features",
+    "comprehensive", "plethora", "myriad", "renowned", "meticulous",
+    "meticulously", "invaluable", "vibrant", "fast-paced", "ever-evolving",
+    "boasts",
 ]
 
 AI_SLOP = [
@@ -58,6 +66,8 @@ AI_SLOP = [
     "when it comes to", "it's not just", "it is not just",
     "more than just", "navigating the complexities", "delve into",
     "tapestry", "testament to", "in conclusion,", "to sum up,",
+    "in today's world", "at its core", "look no further",
+    "navigate the landscape", "navigating the landscape",
 ]
 
 HEDGE = [
@@ -83,6 +93,13 @@ PASSIVE_RE = re.compile(
 NOMINAL_RE = re.compile(
     r"\b\w{4,}(?:tion|sion|ment|ance|ence|ility|ization|isation)s?\b", re.I)
 ING_MAIN_RE = re.compile(r"(?:^|(?<=[.!?]\s))\s*\w+ing\b", re.I)
+# Sentence-initial words that merely end in "-ing" and are not participle
+# openers (issue #13). Imperatives like "Bring the file." are good STE.
+ING_STOP = frozenset({
+    "anything", "bring", "cling", "during", "everything", "evening",
+    "fling", "king", "morning", "nothing", "offspring", "ring",
+    "something", "spring", "sting", "string", "swing", "thing", "wing",
+})
 MODAL_RE = re.compile(r"\b(?:could|should|would|may|might)\b", re.I)
 WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\u2019\-/]*")
 
@@ -138,16 +155,69 @@ def wc(s):
     return len(WORD_RE.findall(s))
 
 
-def count_phrases(text, phrases):
+def phrase_matches(text, phrases):
+    """Return [(phrase, span)], charging each span once (issue #18).
+
+    Longest phrase wins, so 'delve into' is one hit, not 'delve' plus
+    'delve into'. The lists are deliberately kept per-language, so this
+    mirrors the Russian helper instead of sharing it.
+    """
     low = text.lower()
-    n, hits = 0, []
-    for ph in phrases:
-        p = ph.lower()
-        pat = r"(?<![a-z])" + re.escape(p) + r"(?![a-z])"
-        for _ in re.finditer(pat, low):
-            n += 1
-            hits.append(ph)
-    return n, hits
+    found, taken = [], []
+    for ph in sorted(phrases, key=len, reverse=True):
+        pat = r"(?<![a-z])" + re.escape(ph.lower()) + r"(?![a-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((ph, (start, end)))
+    found.sort(key=lambda f: f[1][0])
+    return found
+
+
+def count_phrases(text, phrases):
+    hits = [ph for ph, _ in phrase_matches(text, phrases)]
+    return len(hits), hits
+
+
+PHRASE_GROUPS = (
+    ("banned_word", BANNED),
+    ("marketing_adjective", MARKETING),
+    ("ai_slop", AI_SLOP),
+    ("modal_hedge", HEDGE),
+)
+
+
+def categorised_matches(text, groups=PHRASE_GROUPS):
+    """Return [(category, phrase, span)], one charge per span (issue #21).
+
+    phrase_matches() guards one list at a time, so 'delve' in BANNED and
+    'delve into' in AI_SLOP would each fire on the same words. Scanning the
+    lists together, longest phrase first, keeps the count honest whichever
+    list an entry sits in. A tie goes to the earlier group; LexiconIntegrity
+    keeps one phrase out of two lists so ties stay hypothetical.
+    """
+    low = text.lower()
+    pairs = [(cat, ph) for cat, phrases in groups for ph in phrases]
+    pairs.sort(key=lambda cp: len(cp[1]), reverse=True)
+    found, taken = [], []
+    for cat, ph in pairs:
+        pat = r"(?<![a-z])" + re.escape(ph.lower()) + r"(?![a-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((cat, ph, (start, end)))
+    found.sort(key=lambda f: f[2][0])
+    return found
+
+
+def _ing_main_count(text):
+    """Sentence-initial -ing matches, minus the non-participle stoplist."""
+    return sum(1 for m in ING_MAIN_RE.finditer(text)
+               if m.group(0).strip().lower() not in ING_STOP)
 
 
 def lint(text):
@@ -160,12 +230,17 @@ def lint(text):
     v["semicolon"] = text.count(";")
     v["contraction"] = len(CONTRACTION_RE.findall(text))
     v["passive_voice"] = len(PASSIVE_RE.findall(text))
-    v["ing_main_verb"] = len(ING_MAIN_RE.findall(text))
+    v["ing_main_verb"] = _ing_main_count(text)
     v["nominalization"] = len(NOMINAL_RE.findall(text))
-    v["banned_word"], bh = count_phrases(text, BANNED)
-    v["marketing_adjective"], mh = count_phrases(text, MARKETING)
-    v["ai_slop"], ah = count_phrases(text, AI_SLOP)
-    v["modal_hedge"] = len(MODAL_RE.findall(text)) + count_phrases(text, HEDGE)[0]
+    cm = categorised_matches(text)
+    bh = [ph for cat, ph, _ in cm if cat == "banned_word"]
+    mh = [ph for cat, ph, _ in cm if cat == "marketing_adjective"]
+    ah = [ph for cat, ph, _ in cm if cat == "ai_slop"]
+    v["banned_word"] = len(bh)
+    v["marketing_adjective"] = len(mh)
+    v["ai_slop"] = len(ah)
+    v["modal_hedge"] = (len(MODAL_RE.findall(text))
+                        + sum(1 for cat, _, _ in cm if cat == "modal_hedge"))
 
     paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
@@ -213,18 +288,33 @@ REPLACE = {
     "subsequent to": "after", "with regard to": "about",
     "in terms of": "in", "a number of": "several",
     "the vast majority of": "most",
+    "utilizes": "uses", "utilized": "used", "utilising": "using",
+    "utilised": "used", "leverages": "uses", "leveraged": "used",
+    "delve": "examine", "delves": "examines", "delved": "examined",
+    "delving": "examining", "harness": "use", "harnesses": "uses",
+    "harnessing": "using", "showcase": "show", "showcases": "shows",
+    "showcasing": "showing", "unlock": "enable", "unlocks": "enables",
+    "unlocking": "enabling", "elevate": "improve", "elevates": "improves",
+    "elevating": "improving", "empower": "let", "empowers": "lets",
+    "empowering": "letting", "embark": "start", "embarks": "starts",
+    "embarking": "starting", "comprehensive": "full", "plethora": "many",
+    "myriad": "many", "boasts": "has",
 }
 
 
 def _phrase_hits(text, phrases, lineno, category, out):
-    low = text.lower()
-    for ph in phrases:
-        p = ph.lower()
-        pat = r"(?<![a-z])" + re.escape(p) + r"(?![a-z])"
-        for _ in re.finditer(pat, low):
-            sug = REPLACE.get(p)
-            sug = f"Use '{sug}' instead." if sug else SUGGEST[category]
-            out.append((lineno, category, ph, sug))
+    for ph, _span in phrase_matches(text, phrases):
+        rep = REPLACE.get(ph.lower())
+        sug = f"Use '{rep}' instead." if rep else SUGGEST[category]
+        out.append((lineno, category, ph, sug))
+
+
+def _categorised_hits(text, lineno, out):
+    """Per-line phrase findings, one charge per span across all lists."""
+    for cat, ph, _span in categorised_matches(text):
+        rep = REPLACE.get(ph.lower())
+        sug = f"Use '{rep}' instead." if rep else SUGGEST[cat]
+        out.append((lineno, cat, ph, sug))
 
 
 def diagnostics(text):
@@ -287,11 +377,10 @@ def diagnostics(text):
                          (ING_MAIN_RE, "ing_main_verb"), (NOMINAL_RE, "nominalization"),
                          (MODAL_RE, "modal_hedge")):
             for m in cre.finditer(s):
+                if cre is ING_MAIN_RE and m.group(0).strip().lower() in ING_STOP:
+                    continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
-        _phrase_hits(s, BANNED, i, "banned_word", out)
-        _phrase_hits(s, MARKETING, i, "marketing_adjective", out)
-        _phrase_hits(s, AI_SLOP, i, "ai_slop", out)
-        _phrase_hits(s, HEDGE, i, "modal_hedge", out)
+        _categorised_hits(s, i, out)
     if para_start is not None and para_sents > 6:
         out.append((para_start, "long_paragraph(>6s)",
                     f"{para_sents} sentences", SUGGEST["long_paragraph(>6s)"]))
