@@ -21,12 +21,19 @@ changes.
 
 | File | Words | Violations | Score | Longest sentence |
 | --- | --- | --- | --- | --- |
-| `en/samples/baseline.md` | 157 | 50 | 31.85 | 49 words |
+| `en/samples/baseline.md` | 157 | 52 | 33.12 | 49 words |
 | `en/samples/ste.md` | 121 | 1 | 0.83 | 14 words |
 
 An earlier version of this file reported 32.48 for the baseline. That number
 counted markup as prose. The linters now remove frontmatter, code, link targets
-and URLs before scoring, and the corrected figure is 31.85.
+and URLs before scoring, and the corrected figure was 31.85.
+
+The baseline then moved from 31.85 to 33.12 when the word lists grew. The sample
+text was not touched. Five raw hits appeared, but the score rose by two, because
+three of the new words (`unlock`, `fast-paced`, `comprehensive`) sit inside
+longer phrases the lists already carried. One span is one violation, so those
+three add nothing here. Before that rule was in place they would have been
+charged twice.
 
 ## Russian
 
@@ -34,6 +41,11 @@ and URLs before scoring, and the corrected figure is 31.85.
 | --- | --- | --- | --- | --- |
 | `ru/samples/baseline.md` | 117 | 46 | 39.32 | 27 words |
 | `ru/samples/utr.md` | 94 | 0 | 0.00 | 11 words |
+
+The Russian numbers did not move when the Russian lists grew: none of the new
+entries appear in either Russian sample. A lexicon addition that changes no
+sample is normal, and it is the reason the samples alone are a smoke test rather
+than a measurement.
 
 Baseline by category, per 100 words:
 
@@ -71,6 +83,9 @@ Read this section before you quote the deltas.
 3. The linters match regular expressions. They produce false positives, and a
    writer can lower the score without improving the text.
 4. A score of 0 says nothing about accuracy, completeness, or usefulness.
+5. The baseline score is not a constant. It moves when the lists move, as it did
+   above. Compare texts scored by the same version of the linter, and treat any
+   number quoted here as tied to the commit that produced it.
 
 ## Regression protection
 
@@ -79,6 +94,10 @@ Read this section before you quote the deltas.
 - each baseline scores above 20 per 100 words
 - each clean sample scores below 2 per 100 words
 - each clean sample keeps every sentence at 20 words or fewer
+
+The tests pin the shape rather than the exact score, so a lexicon addition that
+moves the baseline by a point does not fail the build, while a change that
+collapses the gap between slop and clean prose does.
 
 CI also runs both linters against the clean samples with `--max 2`, so a change
 to a rule that quietly breaks the samples fails the build.
