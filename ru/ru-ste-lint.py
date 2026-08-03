@@ -197,6 +197,39 @@ def count_phrases(text, phrases):
     return len(hits), hits
 
 
+PHRASE_GROUPS = (
+    ("clerical", CLERICAL),
+    ("marketing", MARKETING),
+    ("ai_slop", AI_SLOP),
+    ("hedge", HEDGE),
+)
+
+
+def categorised_matches(text, groups=PHRASE_GROUPS):
+    """Return [(category, phrase, span)], one charge per span (issue #21).
+
+    phrase_matches() guards one list at a time, so a short entry in one
+    list and the longer phrase containing it in another would each fire on
+    the same words. Scanning the lists together, longest phrase first,
+    keeps the count honest whichever list an entry sits in. A tie goes to
+    the earlier group; LexiconIntegrity keeps ties hypothetical.
+    """
+    low = _fold(text)
+    pairs = [(cat, ph) for cat, phrases in groups for ph in phrases]
+    pairs.sort(key=lambda cp: len(cp[1]), reverse=True)
+    found, taken = [], []
+    for cat, ph in pairs:
+        pat = r"(?<![а-яa-z])" + re.escape(_fold(ph)) + r"(?![а-яa-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((cat, ph, (start, end)))
+    found.sort(key=lambda f: f[2][0])
+    return found
+
+
 def _participle_count(text):
     """Participle matches minus lexicalized -щий adjectives (issue #14)."""
     return sum(1 for m in PARTICIPLE_RE.finditer(text)
@@ -217,10 +250,14 @@ def lint(text):
     v["gerund"] = len(GERUND_RE.findall(text))
     v["nominalization"] = len(NOMINAL_RE.findall(text))
     v["noun_chain(3+)"] = len(GEN_NOUN_RE.findall(text))
-    v["clerical"], ch = count_phrases(text, CLERICAL)
-    v["marketing"], mh = count_phrases(text, MARKETING)
-    v["ai_slop"], ah = count_phrases(text, AI_SLOP)
-    v["hedge"], _ = count_phrases(text, HEDGE)
+    cm = categorised_matches(text)
+    ch = [ph for cat, ph, _ in cm if cat == "clerical"]
+    mh = [ph for cat, ph, _ in cm if cat == "marketing"]
+    ah = [ph for cat, ph, _ in cm if cat == "ai_slop"]
+    v["clerical"] = len(ch)
+    v["marketing"] = len(mh)
+    v["ai_slop"] = len(ah)
+    v["hedge"] = sum(1 for cat, _, _ in cm if cat == "hedge")
 
     paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
@@ -285,6 +322,14 @@ def _phrase_hits(text, phrases, lineno, category, out):
         rep = REPLACE.get(_fold(ph))
         sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
         out.append((lineno, category, ph, sug))
+
+
+def _categorised_hits(text, lineno, out):
+    """Построчные находки по спискам: один спан — одно нарушение."""
+    for cat, ph, _span in categorised_matches(text):
+        rep = REPLACE.get(_fold(ph))
+        sug = f"Напишите «{rep}»." if rep else SUGGEST[cat]
+        out.append((lineno, cat, ph, sug))
 
 
 def diagnostics(text):
@@ -353,10 +398,7 @@ def diagnostics(text):
                         and m.group(0).lower().startswith(PARTICIPLE_STOP)):
                     continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
-        _phrase_hits(s, CLERICAL, i, "clerical", out)
-        _phrase_hits(s, MARKETING, i, "marketing", out)
-        _phrase_hits(s, AI_SLOP, i, "ai_slop", out)
-        _phrase_hits(s, HEDGE, i, "hedge", out)
+        _categorised_hits(s, i, out)
     if para_start is not None and para_sents > 6:
         out.append((para_start, "long_paragraph(>6s)",
                     f"{para_sents} фраз", SUGGEST["long_paragraph(>6s)"]))
