@@ -42,7 +42,7 @@ CLERICAL = [
     "производить", "производится", "производятся", "реализовывать",
     "реализуется", "обеспечивать", "обеспечивается", "позволяет обеспечить",
     "имеет место", "является", "являются", "являлся", "представляет собой",
-    "путем", "путём", "посредством", "ввиду того что", "с тем чтобы",
+    "путем", "посредством", "ввиду того что", "с тем чтобы",
     "для того чтобы", "необходимо отметить", "следует отметить",
     "стоит отметить", "важно понимать", "важно отметить", "нужно понимать",
     "как известно", "не секрет что", "не секрет, что",
@@ -52,7 +52,7 @@ MARKETING = [
     "инновационный", "инновационное", "инновационная", "уникальный",
     "уникальное", "уникальная", "передовой", "передовые", "передовых",
     "лидирующий", "лидирующие", "ведущий поставщик", "мощный", "мощная",
-    "мощные", "гибкий инструмент", "надежное решение", "надёжное решение",
+    "мощные", "гибкий инструмент", "надежное решение",
     "качественный сервис", "комплексный подход", "индивидуальный подход",
     "команда профессионалов", "широкий спектр", "широкий ассортимент",
     "бесшовный", "бесшовная", "бесшовно", "революционный", "прорывной",
@@ -61,14 +61,14 @@ MARKETING = [
 ]
 
 AI_SLOP = [
-    "давайте разберемся", "давайте разберёмся", "давайте рассмотрим",
+    "давайте разберемся", "давайте рассмотрим",
     "погрузимся", "давайте погрузимся", "в современном мире",
     "в эпоху цифровизации", "в мире технологий", "отличный вопрос",
     "надеюсь, это помогло", "надеюсь это помогло", "надеюсь, я помог",
     "если коротко", "подводя итог", "в заключение хочется",
     "стоит подчеркнуть", "игра меняется", "меняет правила игры",
     "не просто инструмент", "это не просто", "четко, по делу, без воды",
-    "чётко, по делу, без воды", "без лишней воды", "простыми словами говоря",
+    "без лишней воды", "простыми словами говоря",
 ]
 
 HEDGE = [
@@ -165,15 +165,36 @@ def wc(s):
     return len(WORD_RE.findall(s))
 
 
+def _fold(s):
+    return s.lower().replace("ё", "е")
+
+
+def phrase_matches(text, phrases):
+    """Return [(phrase, span)], charging each span once (issue #18).
+
+    Two lexicon entries can cover the same span: the lists carry both
+    spellings of a yo-phrase, which the folding above makes identical, and
+    they carry short phrases nested inside longer ones. Matching
+    longest-first and skipping a span already taken keeps one span worth
+    one violation.
+    """
+    low = _fold(text)
+    found, taken = [], []
+    for ph in sorted(phrases, key=len, reverse=True):
+        pat = r"(?<![а-яa-z])" + re.escape(_fold(ph)) + r"(?![а-яa-z])"
+        for m in re.finditer(pat, low):
+            start, end = m.span()
+            if any(start >= s and end <= e for s, e in taken):
+                continue
+            taken.append((start, end))
+            found.append((ph, (start, end)))
+    found.sort(key=lambda f: f[1][0])
+    return found
+
+
 def count_phrases(text, phrases):
-    low = text.lower().replace("ё", "е")
-    n, hits = 0, []
-    for ph in phrases:
-        p = ph.lower().replace("ё", "е")
-        for _ in re.finditer(r"(?<![а-яa-z])" + re.escape(p) + r"(?![а-яa-z])", low):
-            n += 1
-            hits.append(ph)
-    return n, hits
+    hits = [ph for ph, _ in phrase_matches(text, phrases)]
+    return len(hits), hits
 
 
 def _participle_count(text):
@@ -253,21 +274,17 @@ REPLACE = {
     "в данный момент": "сейчас", "данный": "этот",
     "данного": "этого", "данной": "этой",
     "вышеуказанный": "названный выше", "путем": "через",
-    "путём": "через", "посредством": "через",
+    "посредством": "через",
     "ввиду того что": "потому что", "в связи с тем что": "потому что",
     "производить": "делать", "реализовывать": "делать",
 }
 
 
 def _phrase_hits(text, phrases, lineno, category, out):
-    low = text.lower().replace("ё", "е")
-    for ph in phrases:
-        p = ph.lower().replace("ё", "е")
-        pat = r"(?<![а-яa-z])" + re.escape(p) + r"(?![а-яa-z])"
-        for _ in re.finditer(pat, low):
-            rep = REPLACE.get(p)
-            sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
-            out.append((lineno, category, ph, sug))
+    for ph, _span in phrase_matches(text, phrases):
+        rep = REPLACE.get(_fold(ph))
+        sug = f"Напишите «{rep}»." if rep else SUGGEST[category]
+        out.append((lineno, category, ph, sug))
 
 
 def diagnostics(text):
