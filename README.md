@@ -19,10 +19,11 @@ ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
 ru/samples/              one slop text and one clean rewrite
 harness/SKILL.md         separate skill: how to design an agent harness
 evals/                   eval harness: 12 tasks, 4 conditions, scorer, runner
-tests/                   43 tests, standard library only
+tests/                   52 tests, standard library only
 hooks/pre-commit         git hook that blocks a commit above the limit
 .pre-commit-config.example.yaml
 RESULTS.md               measured scores and their limits
+CONTRIBUTING.md          how to contribute rules, tests, and fixes
 ```
 
 ## Quick start
@@ -31,6 +32,12 @@ RESULTS.md               measured scores and their limits
 git clone https://github.com/Username-ame/anti-slop-kit
 cd anti-slop-kit
 
+./demo.sh
+```
+
+Or step by step:
+
+```sh
 python3 en/ste-lint.py en/samples/baseline.md en/samples/ste.md
 python3 ru/ru-ste-lint.py ru/samples/baseline.md ru/samples/utr.md
 
@@ -84,6 +91,34 @@ git commit --no-verify              # skip the hook
 For [pre-commit](https://pre-commit.com), copy `.pre-commit-config.example.yaml`
 and adjust the two paths.
 
+## Explain a score
+
+A score says where the problems are, not only how many. `--explain` prints one
+line per finding: line number, rule, matched text, and the suggested fix.
+
+```sh
+python3 en/ste-lint.py --explain docs/draft.md
+```
+
+```text
+draft.md                     words=  412 total=   9 per100w=  2.18 maxsent= 24
+  L14    passive_voice         'is handled'                           Name the actor. Use active voice.
+  L22    banned_word           'utilize'                              Use 'use' instead.
+```
+
+## GitHub Actions annotations
+
+`--format github` emits workflow commands, so findings appear inline on pull
+request diffs when the linter runs in GitHub Actions:
+
+```yaml
+- name: Lint prose
+  run: python3 en/ste-lint.py --format github --max 5 docs/*.md
+```
+
+Each finding becomes a `::warning` annotation with file, line, rule name and
+suggested fix. Combine with `--max` to fail the job and annotate at once.
+
 ## Exclude a region
 
 The linters skip frontmatter, code blocks, inline code, link targets, bare URLs
@@ -103,6 +138,12 @@ The linters match patterns. They do not read.
 - Every rule can produce a false positive. Passive voice is right when the actor
   is unknown. Some long sentences are clear.
 - Use the score to find candidates for a rewrite, not to grade a writer.
+
+## Contributing
+
+See `CONTRIBUTING.md` for the ground rules (standard library only, no shared
+modules between linters, a test in the same commit as a rule change) and how to
+add a banned word or report a false positive.
 
 ## Sources
 
