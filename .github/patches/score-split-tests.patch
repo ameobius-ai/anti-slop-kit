@@ -1,0 +1,93 @@
+--- a/tests/test_linters.py
++++ b/tests/test_linters.py
+@@ -5,6 +5,7 @@
+ import io
+ import contextlib
+ import pathlib
++import re
+ import unittest
+ 
+ ROOT = pathlib.Path(__file__).resolve().parents[1]
+@@ -475,6 +476,82 @@
+             self.assertEqual(en.lint(text)["violations"][category], 1, text)
+ 
+ 
++class ScoreSplit(unittest.TestCase):
++    """The slop/CL split (issue #2): separately visible, default line pinned."""
++
++    def call(self, mod, argv):
++        buf = io.StringIO()
++        err = io.StringIO()
++        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
++            code = mod.main(argv)
++        return code, buf.getvalue(), err.getvalue()
++
++    def test_lint_dict_exposes_slop_and_cl(self):
++        r = en.lint("We utilize a comprehensive solution. "
++                    "Open the side panel door and check the small red "
++                    "warning lamp before you start the pump.")
++        self.assertEqual(r["slop"] + r["cl"], r["total"])
++        self.assertEqual(r["slop"],
++                         sum(r["violations"][c] for c in en.SLOP_CATEGORIES))
++        self.assertIn("slop_per100w", r)
++        self.assertIn("cl_per100w", r)
++
++    def test_default_line_has_no_breakdown(self):
++        code, out, _ = self.call(en, [str(ROOT / "en/samples/baseline.md")])
++        self.assertNotIn("slop=", out)
++        self.assertNotIn(" cl=", out)
++
++    def test_breakdown_appends_and_sums(self):
++        code, out, _ = self.call(
++            en, ["--breakdown", str(ROOT / "en/samples/baseline.md")])
++        m = re.search(r"total=\s*(\d+).*slop=\s*(\d+)\s+cl=\s*(\d+)", out)
++        self.assertIsNotNone(m)
++        total, slop, cl = (int(g) for g in m.groups())
++        self.assertEqual(slop + cl, total)
++
++    def test_ru_breakdown_sums(self):
++        code, out, _ = self.call(
++            ru, ["--breakdown", str(ROOT / "ru/samples/baseline.md")])
++        m = re.search(r"total=\s*(\d+).*slop=\s*(\d+)\s+cl=\s*(\d+)", out)
++        self.assertIsNotNone(m)
++        total, slop, cl = (int(g) for g in m.groups())
++        self.assertEqual(slop + cl, total)
++
++    def test_clean_samples_carry_zero_slop(self):
++        for mod, rel in ((en, "en/samples/ste.md"), (ru, "ru/samples/utr.md")):
++            r = mod.lint((ROOT / rel).read_text(encoding="utf-8"))
++            self.assertEqual(r["slop"], 0, rel)
++            self.assertEqual(r["slop"] + r["cl"], r["total"], rel)
++
++    def test_only_slop_gates_on_slop(self):
++        clean, _, _ = self.call(
++            en, ["--only", "slop", "--max", "0", str(ROOT / "en/samples/ste.md")])
++        self.assertEqual(clean, 0)
++        bad, _, err = self.call(
++            en, ["--only", "slop", "--max", "0", str(ROOT / "en/samples/baseline.md")])
++        self.assertEqual(bad, 1)
++        self.assertIn("slop per 100 words", err)
++
++    def test_only_cl_gates_on_cl(self):
+        code, _, err = self.call(
+            en, ["--only", "cl", "--max", "0", str(ROOT / "en/samples/ste.md")])
++        self.assertEqual(code, 1)
++        self.assertIn("cl per 100 words", err)
++
++    def test_ru_only_slop_gate(self):
++        clean, _, _ = self.call(
++            ru, ["--only", "slop", "--max", "0", str(ROOT / "ru/samples/utr.md")])
++        self.assertEqual(clean, 0)
++        bad, _, _ = self.call(
++            ru, ["--only", "slop", "--max", "0", str(ROOT / "ru/samples/baseline.md")])
++        self.assertEqual(bad, 1)
++
++    def test_only_rejects_bad_value(self):
++        for argv in (["--only", "bogus"], ["--only=bogus"]):
++            code, _, _ = self.call(en, argv + [str(ROOT / "en/samples/ste.md")])
++            self.assertEqual(code, 2, argv)
++
++
+ class SampleRegression(unittest.TestCase):
+     """The samples are the contract: a slop text scores high, a clean one low."""
+ 
