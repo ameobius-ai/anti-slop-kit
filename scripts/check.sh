@@ -39,6 +39,9 @@ if [ "$target" != lint ]; then
 
 	step 'the eval scripts must compile'
 	"$python_bin" -m compileall -q evals
+
+	step 'source files must not carry invisible characters'
+	"$python_bin" scripts/check_control_chars.py
 fi
 
 if [ "$target" != tests ]; then
