@@ -73,3 +73,38 @@ class TestTechnicalRegister(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestParticipleHandling(unittest.TestCase):
+    
+    def test_participle_re_matches(self):
+        import re
+        # Test that PARTICIPLE_RE matches -ing and -ed forms
+        text = "processing cached used being"
+        matches = PARTICIPLE_RE.findall(text)
+        self.assertIn("processing", matches)
+        self.assertIn("cached", matches)
+        self.assertIn("used", matches)
+        self.assertIn("being", matches)
+    
+    def test_participle_stop_excludes_lexicalized(self):
+        from ste_lint import _participle_count
+        # "being" and "used" are in PARTICIPLE_STOP
+        text = "The system is being used for testing"
+        count = _participle_count(text)
+        # "being" and "used" are stopped, "testing" is technical
+        self.assertEqual(count, 0)
+    
+    def test_participle_count_detects_violations(self):
+        from ste_lint import _participle_count
+        # "working" is not technical or stopped
+        text = "The function is working correctly"
+        count = _participle_count(text)
+        self.assertEqual(count, 1)  # "working"
+    
+    def test_participle_excludes_technical(self):
+        from ste_lint import _participle_count
+        # "caching", "processing", "configured" are technical
+        text = "The caching and processing is configured"
+        count = _participle_count(text)
+        self.assertEqual(count, 0)
