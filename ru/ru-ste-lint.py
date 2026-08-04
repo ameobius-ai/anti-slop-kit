@@ -100,6 +100,41 @@ PARTICIPLE_STOP = (
     "вышеупомянут", "нижеследующ",
 )
 
+# Технический регистр (issue #33): стандартная терминология
+# хранилищ/систем. Отглагольные существительные, пассив и причастия,
+# образованные от этих основ, — корректные слова в документации,
+# не AI-слоп. Нормализация: нижний регистр, ё→е; сопоставление по
+# префиксу (основа ловит все словоформы).
+TECHNICAL_STEMS = (
+    # storage / cache / eviction / deletion / usage
+    "кэшировани", "кешировани", "кэширу", "кеширу",
+    "вытеснени", "вытесня", "удалени", "удаля",
+    "использовани", "использу", "хранени", "храня",
+    # connect / process / compress / encrypt / auth / config
+    "подключени", "подключа", "соединени", "соединя",
+    "обработк", "обрабатыва", "сжати", "шифровани",
+    "аутентификаци", "авторизаци", "конфигураци", "настраива",
+    "интеграци", "маршрутизаци", "инициализаци", "оптимизаци",
+    "оптимизиру", "миграци", "синхронизаци", "синхронизиру",
+    "развертывани", "архивировани", "буферизаци", "транзакци",
+    "сериализаци", "десериализаци", "компиляци", "валидаци",
+    # lifecycle / transport / support / overlap
+    "запуска", "останавлива", "переда", "поддержива", "пересека",
+    # participles / short passives typical for docs (deprecated, allowed, expected…)
+    "устаревш", "допустим", "ожидаем", "встроенн", "настроен",
+    "задокументирован", "зарегистрирован", "сохранен", "загружен",
+    "скачан", "обновлен", "установлен", "удален", "добавлен",
+    "изменен", "создан", "сгенерирован", "получен", "отправлен",
+    "преобразован", "проверен", "протестирован", "развернут",
+    "сконфигурирован", "активирован", "инициализирован",
+    "перезапущен", "завершен", "заблокирован", "разблокирован",
+    "авторизован", "аутентифицирован", "инсталлирован", "описан",
+    "определен", "указан", "задан", "включен", "выключен",
+    "ограничен", "отсортирован", "отфильтрован", "извлечен",
+    "применен", "вызываем", "возвращаем", "предоставляем",
+    "требуем", "выполняем",
+)
+
 # gerunds
 GERUND_RE = re.compile(
     r"\b[а-яё]{3,}(?:ывая|ивая|уя|юя|авши|ивши|вшись|ясь|аясь|уясь)\b", re.I)
@@ -233,10 +268,29 @@ def categorised_matches(text, groups=PHRASE_GROUPS):
     return found
 
 
+def _tech(word):
+    """True if the (folded) word belongs to the technical-register allowlist."""
+    w = _fold(word)
+    return any(w.startswith(stem) for stem in TECHNICAL_STEMS)
+
+
+def _morph_count(regex, text, stop=None):
+    """Morphological violations, minus lexicalized stops and technical terms."""
+    n = 0
+    for m in regex.finditer(text):
+        word = m.group(0)
+        if stop is not None and word.lower().startswith(stop):
+            continue
+        if _tech(word):
+            continue
+        n += 1
+    return n
+
+
 def _participle_count(text):
-    """Participle matches minus lexicalized -щий adjectives (issue #14)."""
-    return sum(1 for m in PARTICIPLE_RE.finditer(text)
-               if not m.group(0).lower().startswith(PARTICIPLE_STOP))
+    """Participle matches minus lexicalized -щий adjectives (issue #14)
+    and technical-register participles (issue #33)."""
+    return _morph_count(PARTICIPLE_RE, text, PARTICIPLE_STOP)
 
 
 def lint(text):
@@ -247,11 +301,11 @@ def lint(text):
     v = {}
     v["long_sentence(>20w)"] = sum(1 for s in sents if wc(s) > 20)
     v["semicolon"] = text.count(";")
-    v["passive_reflexive"] = len(PASSIVE_RE.findall(text))
-    v["passive_short"] = len(SHORT_PASSIVE_RE.findall(text))
+    v["passive_reflexive"] = _morph_count(PASSIVE_RE, text)
+    v["passive_short"] = _morph_count(SHORT_PASSIVE_RE, text)
     v["participle"] = _participle_count(text)
-    v["gerund"] = len(GERUND_RE.findall(text))
-    v["nominalization"] = len(NOMINAL_RE.findall(text))
+    v["gerund"] = _morph_count(GERUND_RE, text)
+    v["nominalization"] = _morph_count(NOMINAL_RE, text)
     v["noun_chain(3+)"] = len(GEN_NOUN_RE.findall(text))
     cm = categorised_matches(text)
     ch = [ph for cat, ph, _ in cm if cat == "clerical"]
@@ -401,6 +455,8 @@ def diagnostics(text):
             for m in cre.finditer(s):
                 if (cre is PARTICIPLE_RE
                         and m.group(0).lower().startswith(PARTICIPLE_STOP)):
+                    continue
+                if _tech(m.group(0)):
                     continue
                 out.append((i, cat, m.group(0), SUGGEST[cat]))
         _categorised_hits(s, i, out)
