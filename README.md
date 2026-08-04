@@ -7,6 +7,22 @@ from technical prose. Two languages: English (ASD-STE100 mechanics) and Russian
 A skill tells the model how to write. A linter proves whether the model did it.
 The linter is the part most anti-slop advice leaves out.
 
+## Who this is for
+
+**Use this for:** API docs, runbooks, release notes, incident reports, onboarding
+docs, support macros, changelogs — any text where a reader must act correctly on
+the first read. Also useful as a gate on LLM-generated documentation.
+
+**Do not use this for:** essays, marketing copy where voice is the point, fiction,
+or anything where rhythm and register matter more than being parsed correctly.
+The sentence-length and semicolon rules will fight you, and they should: they come
+from maintenance-manual standards, not from general writing advice.
+
+**What the score means:** violations per 100 words. A smoke alarm, not a grade.
+The useful signal is the delta across revisions of the same text. An absolute
+threshold means something only once a team picks one for a document class — the
+CI samples gate at 2, and that is a convention, not a law.
+
 ## What is in here
 
 ```
@@ -61,8 +77,19 @@ The score is violations per 100 words. Lower is cleaner.
 
 Read `RESULTS.md` before you quote these numbers. Two texts per language is a
 smoke test, not a benchmark. `evals/` holds the harness for a real measurement
-across six tasks per language and four prompt conditions. It has not been run
-yet, and no number on this page comes from it.
+across six tasks per language and four prompt conditions. First live runs were
+executed on 2026-08-04 (EN 23/24 cells, RU 24/24, via a local OpenAI-compatible
+gateway); see `evals/README.md` for the setup and scores. No number on this page
+comes from it yet.
+
+## Russian is a first-class citizen
+
+The RU side is not a translation of the EN side. English plain-language tooling
+is crowded; a deterministic Russian linter is rare. It targets канцелярит,
+отглагольные существительные, цепочки родительных падежей and причастные
+обороты, plus typography (ёлочки, тире), against ГОСТ Р 58049-2017 §8.2.3 (УТР).
+It carries its own lexicon, its own morphology handling (ё-folding, a participle
+stoplist), and its own samples and scores.
 
 ## Use it in a pipeline
 

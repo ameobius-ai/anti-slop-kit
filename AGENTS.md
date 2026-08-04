@@ -16,7 +16,7 @@ The linter is the point. A skill claims an effect; only the linter shows one.
 en/SKILL.md, en/ste-lint.py, en/samples/     English skill, linter, samples
 ru/SKILL.md, ru/ru-ste-lint.py, ru/samples/  Russian skill, linter, samples
 harness/SKILL.md                             separate skill: agent harness design
-evals/                                       eval harness, never run yet
+evals/                                       eval harness, first run 2026-08-04
 tests/                                       unittest suite, 112 tests
 hooks/pre-commit                             local git hook
 RESULTS.md                                   measured scores and their limits
