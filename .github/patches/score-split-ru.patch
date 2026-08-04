@@ -1,17 +1,17 @@
 --- a/ru/ru-ste-lint.py
 +++ b/ru/ru-ste-lint.py
-@@ -206,6 +206,10 @@
-     ("ai_slop", AI_SLOP),
+@@ -242,6 +242,10 @@
      ("hedge", HEDGE),
  )
-+
+ 
 +# The slop bucket of the score split (issue #2). Every other category is
 +# controlled-language: correct for manuals, advisory for prose.
 +SLOP_CATEGORIES = tuple(cat for cat, _ in PHRASE_GROUPS)
- 
++
  
  def categorised_matches(text, groups=PHRASE_GROUPS):
-@@ -266,6 +270,7 @@
+     """Return [(category, phrase, span)], one charge per span (issue #21).
+@@ -320,6 +324,7 @@
      v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
  
      total = sum(v.values())
@@ -19,7 +19,7 @@
      typo = {
          "straight_quotes": text.count('"'),
          "hyphen_as_dash": len(re.findall(r"\s-\s", text)),
-@@ -278,6 +283,10 @@
+@@ -332,6 +337,10 @@
          "per100w": {k: round(x * 100.0 / words, 2) for k, x in v.items()},
          "total": total,
          "total_per100w": round(total * 100.0 / words, 2),
@@ -30,7 +30,7 @@
          "typography": typo,
          "longest_sentence_words": max((wc(s) for s in sents), default=0),
          "sample_clerical": list(dict.fromkeys(ch))[:8],
-@@ -415,13 +424,17 @@
+@@ -471,13 +480,17 @@
      return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
  
  
@@ -52,7 +52,7 @@
      if text is not None and fmt == "github" and not as_json:
          for line, cat, match, sug in diagnostics(text):
              print(f"::warning file={name},line={line},title={cat}::"
-@@ -429,16 +442,23 @@
+@@ -485,16 +498,23 @@
      elif text is not None and explain and not as_json:
          for line, cat, match, sug in diagnostics(text):
              print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
@@ -80,7 +80,7 @@
      expanded = []
      for f in files:
          expanded += sorted(glob.glob(f)) if any(c in f for c in "*?[") else [f]
-@@ -451,12 +471,13 @@
+@@ -507,12 +527,13 @@
              print(f"ERROR {f}: {exc}", file=sys.stderr)
              return 2
          failed += report(f, lint(text), as_json, max_score,
@@ -95,7 +95,7 @@
      i = 0
      while i < len(argv):
          a = argv[i]
-@@ -475,6 +496,19 @@
+@@ -531,6 +552,19 @@
              if fmt not in ("text", "github"):
                  print(f"ERROR: unknown format {fmt}", file=sys.stderr)
                  return 2
@@ -105,8 +105,7 @@
 +            i += 1
 +            if i >= len(argv) or argv[i] not in ("slop", "cl"):
 +                print("ERROR: --only needs slop or cl", file=sys.stderr)
-+                return 2
-+            only = argv[i]
++                return 2\n+            only = argv[i]
 +        elif a.startswith("--only="):
 +            only = a.split("=", 1)[1]
 +            if only not in ("slop", "cl"):
@@ -115,7 +114,7 @@
          elif a == "--max":
              i += 1
              if i >= len(argv):
-@@ -492,7 +526,7 @@
+@@ -548,7 +582,7 @@
          else:
              files.append(a)
          i += 1
