@@ -55,7 +55,7 @@
 +
 +    def test_clean_samples_carry_zero_slop(self):
 +        for mod, rel in ((en, "en/samples/ste.md"), (ru, "ru/samples/utr.md")):
-+            r = mod.lint((ROOT / rel).read_text(encoding="utf-8"))
+            r = mod.lint((ROOT / rel).read_text(encoding="utf-8"))
 +            self.assertEqual(r["slop"], 0, rel)
 +            self.assertEqual(r["slop"] + r["cl"], r["total"], rel)
 +
@@ -69,8 +69,8 @@
 +        self.assertIn("slop per 100 words", err)
 +
 +    def test_only_cl_gates_on_cl(self):
-        code, _, err = self.call(
-            en, ["--only", "cl", "--max", "0", str(ROOT / "en/samples/ste.md")])
++        code, _, err = self.call(
++            en, ["--only", "cl", "--max", "0", str(ROOT / "en/samples/ste.md")])
 +        self.assertEqual(code, 1)
 +        self.assertIn("cl per 100 words", err)
 +
