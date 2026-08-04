@@ -5,7 +5,9 @@ is a smoke test. This directory holds the harness for a real measurement.
 
 **Status: first full run executed 2026-08-04** via a local OpenAI-compatible gateway
 (cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`).
-en 23/24 cells (1 timeout on `en-05__banlist`), ru 24/24. Mean per condition (lower is cleaner):
+en 23/28 cells (1 timeout on `en-05__banlist`), ru 24/28. The 07-task cells are
+not generated yet; the means below come from the six-task grid. Mean per
+condition (lower is cleaner):
 
 | lang | bare | plain | banlist | skill |
 |---|---|---|---|---|
@@ -21,7 +23,7 @@ the harness itself is OpenAI-compatible, so any endpoint works.
 
 ## Design
 
-Six tasks per language, four conditions, one model per run.
+Seven tasks per language, four conditions, one model per run.
 
 The four conditions exist to separate three different claims that are easy to
 confuse:
