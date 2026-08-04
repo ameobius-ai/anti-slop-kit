@@ -104,8 +104,9 @@
 +        elif a == "--only":
 +            i += 1
 +            if i >= len(argv) or argv[i] not in ("slop", "cl"):
-+                print("ERROR: --only needs slop or cl", file=sys.stderr)
-+                return 2\n+            only = argv[i]
+                print("ERROR: --only needs slop or cl", file=sys.stderr)
++                return 2
++            only = argv[i]
 +        elif a.startswith("--only="):
 +            only = a.split("=", 1)[1]
 +            if only not in ("slop", "cl"):
