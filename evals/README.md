@@ -12,6 +12,10 @@ en 23/24 cells (1 timeout on `en-05__banlist`), ru 24/24. Mean per condition (lo
 | en | 5.78 | 7.89 | 5.18 | **2.64** |
 | ru | 10.73 | 10.70 | 9.59 | **7.22** |
 
+> The ru row is **pre-fix** (linter before PR #34). After the technical-register
+> allowlist (issue #33), re-scoring the same outputs gives ru: bare 10.73, plain 6.80,
+> banlist 3.63, skill **2.00** — RU skill at parity with EN (2.00 vs 2.64).
+
 Earlier scaffolding note: the authoring environment had no external network/API key;
 the harness itself is OpenAI-compatible, so any endpoint works.
 
