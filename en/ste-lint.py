@@ -223,6 +223,31 @@ def _ing_main_count(text):
     return sum(1 for m in ING_MAIN_RE.finditer(text)
                if m.group(0).strip().lower() not in ING_STOP)
 
+# === PARTICIPLE HANDLING (ported from RU linter, issue #12) ===
+
+# -ing and -ed forms that often indicate passive voice or weak construction
+PARTICIPLE_RE = re.compile(
+    r"\b[a-z]{3,}(?:ing|ed|en)\b", re.I)
+
+# Lexicalized exceptions: common -ing/-ed words that are not violations
+PARTICIPLE_STOP = (
+    "being", "during", "king", "ring", "sing", "spring", "string", "thing",
+    "working", "building", "reading", "leading", "hearing", "meaning",
+    "used", "based", "cased", "named", "typed", "filed", "tiled",
+)
+
+
+def _participle_count(text):
+    """Participle matches minus lexicalized exceptions and technical terms.
+    
+    Counts -ing and -ed forms that might indicate passive voice or weak
+    construction, excluding:
+    - Lexicalized exceptions (being, during, used, based, etc.)
+    - Technical terms from TECHNICAL_STEMS
+    """
+    return _morph_count(PARTICIPLE_RE, text, PARTICIPLE_STOP)
+
+
 
 def lint(text):
     text = preprocess(text)
