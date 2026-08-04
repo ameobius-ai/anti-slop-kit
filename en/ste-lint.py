@@ -188,6 +188,10 @@ PHRASE_GROUPS = (
     ("modal_hedge", HEDGE),
 )
 
+# The slop bucket of the score split (issue #2). Every other category is
+# controlled-language: correct for manuals, advisory for prose.
+SLOP_CATEGORIES = tuple(cat for cat, _ in PHRASE_GROUPS)
+
 
 def categorised_matches(text, groups=PHRASE_GROUPS):
     """Return [(category, phrase, span)], one charge per span (issue #21).
@@ -246,6 +250,7 @@ def lint(text):
     v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(p)) > 6)
 
     total = sum(v.values())
+    slop = sum(v[cat] for cat in SLOP_CATEGORIES)
     return {
         "words": words,
         "sentences": len(sents),
@@ -253,6 +258,10 @@ def lint(text):
         "per100w": {k: round(x * 100.0 / words, 2) for k, x in v.items()},
         "total": total,
         "total_per100w": round(total * 100.0 / words, 2),
+        "slop": slop,
+        "cl": total - slop,
+        "slop_per100w": round(slop * 100.0 / words, 2),
+        "cl_per100w": round((total - slop) * 100.0 / words, 2),
         "em_dash(slop-marker)": text.count("\u2014"),
         "longest_sentence_words": max((wc(s) for s in sents), default=0),
         "sample_banned": list(dict.fromkeys(bh))[:8],
@@ -392,13 +401,17 @@ def _gh_escape(v):
     return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
-def report(name, r, as_json, max_score, explain=False, fmt="text", text=None):
+def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
+           breakdown=False, only=None):
     if as_json:
         print(json.dumps({name: r}, ensure_ascii=False, indent=2))
     else:
-        print(f"{os.path.basename(name):28} words={r['words']:5d} "
-              f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
-              f"maxsent={r['longest_sentence_words']:3d}")
+        line = (f"{os.path.basename(name):28} words={r['words']:5d} "
+                f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
+                f"maxsent={r['longest_sentence_words']:3d}")
+        if breakdown:
+            line += f" slop={r['slop']:4d} cl={r['cl']:4d}"
+        print(line)
     if text is not None and fmt == "github" and not as_json:
         for line, cat, match, sug in diagnostics(text):
             print(f"::warning file={name},line={line},title={cat}::"
@@ -406,16 +419,23 @@ def report(name, r, as_json, max_score, explain=False, fmt="text", text=None):
     elif text is not None and explain and not as_json:
         for line, cat, match, sug in diagnostics(text):
             print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
-    if max_score is not None and r["total_per100w"] > max_score:
-        print(f"FAIL {name}: {r['total_per100w']:.2f} per 100 words "
+    metric, label = r["total_per100w"], "per 100 words"
+    if only == "slop":
+        metric, label = r["slop_per100w"], "slop per 100 words"
+    elif only == "cl":
+        metric, label = r["cl_per100w"], "cl per 100 words"
+    if max_score is not None and metric > max_score:
+        print(f"FAIL {name}: {metric:.2f} {label} "
               f"is above the limit of {max_score:.2f}", file=sys.stderr)
         return 1
     return 0
 
 
-def run(files, as_json=False, max_score=None, explain=False, fmt="text"):
+def run(files, as_json=False, max_score=None, explain=False, fmt="text",
+        breakdown=False, only=None):
     if not files:
-        return report("<stdin>", lint(sys.stdin.read()), True, max_score)
+        return report("<stdin>", lint(sys.stdin.read()), True, max_score,
+                      only=only)
     expanded = []
     for f in files:
         expanded += sorted(glob.glob(f)) if any(c in f for c in "*?[") else [f]
@@ -428,12 +448,13 @@ def run(files, as_json=False, max_score=None, explain=False, fmt="text"):
             print(f"ERROR {f}: {exc}", file=sys.stderr)
             return 2
         failed += report(f, lint(text), as_json, max_score,
-                         explain, fmt, text)
+                         explain, fmt, text, breakdown, only)
     return 1 if failed else 0
 
 
 def main(argv):
     as_json, max_score, explain, fmt, files = False, None, False, "text", []
+    breakdown, only = False, None
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -452,6 +473,19 @@ def main(argv):
             if fmt not in ("text", "github"):
                 print(f"ERROR: unknown format {fmt}", file=sys.stderr)
                 return 2
+        elif a == "--breakdown":
+            breakdown = True
+        elif a == "--only":
+            i += 1
+            if i >= len(argv) or argv[i] not in ("slop", "cl"):
+                print("ERROR: --only needs slop or cl", file=sys.stderr)
+                return 2
+            only = argv[i]
+        elif a.startswith("--only="):
+            only = a.split("=", 1)[1]
+            if only not in ("slop", "cl"):
+                print(f"ERROR: unknown component {only}", file=sys.stderr)
+                return 2
         elif a == "--max":
             i += 1
             if i >= len(argv):
@@ -469,7 +503,7 @@ def main(argv):
         else:
             files.append(a)
         i += 1
-    return run(files, as_json, max_score, explain, fmt)
+    return run(files, as_json, max_score, explain, fmt, breakdown, only)
 
 
 if __name__ == "__main__":
