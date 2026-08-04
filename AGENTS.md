@@ -17,15 +17,18 @@ en/SKILL.md, en/ste-lint.py, en/samples/     English skill, linter, samples
 ru/SKILL.md, ru/ru-ste-lint.py, ru/samples/  Russian skill, linter, samples
 harness/SKILL.md                             separate skill: agent harness design
 evals/                                       eval harness, first run 2026-08-04
-tests/                                       unittest suite, 112 tests
-hooks/pre-commit                             local git hook
+examples/                                    before/after pairs, scores in notes
+tests/                                       unittest suite, standard library only
+scripts/check.sh                             the whole gate in one entry point
+hooks/pre-commit, hooks/pre-push             local git hooks
 RESULTS.md                                   measured scores and their limits
 ```
 
 ## Commands
 
 ```sh
-python3 -m unittest discover -s tests            # must pass before any push
+bash scripts/check.sh                            # the gate: tests, then linters
+python3 -m unittest discover -s tests            # the test half alone
 python3 en/ste-lint.py --max 2 en/samples/ste.md
 python3 ru/ru-ste-lint.py --max 2 ru/samples/utr.md
 python3 evals/score.py evals/outputs
@@ -47,6 +50,11 @@ or unreadable file.
    the CI job read it.
 6. Push code before the workflow that runs it. The reverse order left CI red for
    two commits.
+7. Run `bash scripts/check.sh` before every push. GitHub Actions is disabled at
+   the account level for this account, so `ci.yml` has never executed a single
+   check run here. Nothing verifies a branch after it leaves the machine.
+8. Never write a test count or a sample score into prose. Both drifted three
+   times, and `tests/test_repo_integrity.py` now fails on either.
 
 ## Verification gate
 
