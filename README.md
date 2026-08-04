@@ -49,7 +49,7 @@ demo.sh                  one-command demo: samples, findings, tests
 ## Quick start
 
 ```sh
-git clone https://github.com/Username-ame/anti-slop-kit
+git clone https://github.com/ameobius-ai/anti-slop-kit
 cd anti-slop-kit
 
 ./demo.sh
