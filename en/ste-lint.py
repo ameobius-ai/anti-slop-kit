@@ -401,44 +401,29 @@ def _gh_escape(v):
     return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
-def select(rows, only):
-    """Keep the diagnostics that belong to the component being gated.
-
-    --only moved the threshold and nothing else. `--only slop` still printed
-    every controlled-language finding and still reported the combined score,
-    so the output argued for edits the gate was not asking for.
-    """
-    if only not in ("slop", "cl"):
-        return rows
-    want_slop = only == "slop"
-    return [row for row in rows if (row[1] in SLOP_CATEGORIES) == want_slop]
-
-
 def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
            breakdown=False, only=None):
-    count, metric, label = r["total"], r["total_per100w"], "per 100 words"
-    if only == "slop":
-        count, metric, label = r["slop"], r["slop_per100w"], "slop per 100 words"
-    elif only == "cl":
-        count, metric, label = r["cl"], r["cl_per100w"], "cl per 100 words"
     if as_json:
         print(json.dumps({name: r}, ensure_ascii=False, indent=2))
     else:
         line = (f"{os.path.basename(name):28} words={r['words']:5d} "
-                f"total={count:4d} per100w={metric:6.2f} "
+                f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
                 f"maxsent={r['longest_sentence_words']:3d}")
         if breakdown:
             line += f" slop={r['slop']:4d} cl={r['cl']:4d}"
-        if only:
-            line += f" only={only}"
         print(line)
     if text is not None and fmt == "github" and not as_json:
-        for line, cat, match, sug in select(diagnostics(text), only):
+        for line, cat, match, sug in diagnostics(text):
             print(f"::warning file={name},line={line},title={cat}::"
                   f"{_gh_escape(match)} -- {_gh_escape(sug)}")
     elif text is not None and explain and not as_json:
-        for line, cat, match, sug in select(diagnostics(text), only):
+        for line, cat, match, sug in diagnostics(text):
             print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
+    metric, label = r["total_per100w"], "per 100 words"
+    if only == "slop":
+        metric, label = r["slop_per100w"], "slop per 100 words"
+    elif only == "cl":
+        metric, label = r["cl_per100w"], "cl per 100 words"
     if max_score is not None and metric > max_score:
         print(f"FAIL {name}: {metric:.2f} {label} "
               f"is above the limit of {max_score:.2f}", file=sys.stderr)
@@ -653,127 +638,4 @@ class MarkdownStructureAnalyzer:
 def check_markdown_structure(lines):
     '''Run markdown structure analysis.'''
     analyzer = MarkdownStructureAnalyzer()
-    return analyzer.analyze(lines)
-
-
-# === CODE COMMENT ANALYSIS ===
-
-class CodeCommentAnalyzer:
-    '''Analyzes code comments for quality issues.'''
-
-    def __init__(self):
-        self.violations = []
-
-    def analyze(self, lines):
-        '''Run all code comment checks.'''
-        self.check_comment_density(lines)
-        self.check_obvious_comments(lines)
-        self.check_todo_in_comments(lines)
-        self.check_what_vs_why(lines)
-        return self.violations
-    
-    def check_comment_density(self, lines):
-        '''Check comment-to-code ratio.'''
-        code_lines = 0
-        comment_lines = 0
-        
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            # Python comments
-            if stripped.startswith('#'):
-                comment_lines += 1
-            # C-style comments
-            elif stripped.startswith('//') or stripped.startswith('/*'):
-                comment_lines += 1
-            else:
-                code_lines += 1
-        
-        if code_lines == 0:
-            return
-        
-        ratio = comment_lines / code_lines
-        
-        # Very low ratio (<5%) suggests no documentation
-        if ratio < 0.05 and code_lines > 20:
-            self.violations.append({
-                'rule': 'code_low_comment_ratio',
-                'desc': f'Very low comment ratio ({ratio:.1%}) for {code_lines} code lines',
-                'line': 0,
-                'text': f'{comment_lines} comments, {code_lines} code'
-            })
-        
-        # Very high ratio (>80%) suggests mostly comments
-        if ratio > 0.80 and comment_lines > 10:
-            self.violations.append({
-                'rule': 'code_high_comment_ratio',
-                'desc': f'Very high comment ratio ({ratio:.1%})',
-                'line': 0,
-                'text': f'{comment_lines} comments, {code_lines} code'
-            })
-    
-    def check_obvious_comments(self, lines):
-        '''Detect comments that just restate the code.'''
-        obvious_patterns = [
-            (r'#\s*increment\s*(counter|variable|i|j|k)\s*$', 'obvious: increment'),
-            (r'#\s*return\s*(the\s*)?(value|result)\s*$', 'obvious: return'),
-            (r'#\s*check\s*if\s*$', 'obvious: check if'),
-            (r'//\s*increment\s*(counter|variable|i|j|k)\s*$', 'obvious: increment'),
-            (r'//\s*return\s*(the\s*)?(value|result)\s*$', 'obvious: return'),
-        ]
-        
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-            for pattern, desc in obvious_patterns:
-                if re.search(pattern, stripped, re.IGNORECASE):
-                    self.violations.append({
-                        'rule': 'code_obvious_comment',
-                        'desc': desc,
-                        'line': i,
-                        'text': stripped[:60]
-                    })
-    
-    def check_todo_in_comments(self, lines):
-        '''Detect TODO comments that should be tracked differently.'''
-        todo_patterns = [
-            r'#\s*TODO\b',
-            r'#\s*FIXME\b',
-            r'//\s*TODO\b',
-            r'//\s*FIXME\b',
-        ]
-        
-        for i, line in enumerate(lines, 1):
-            for pattern in todo_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    self.violations.append({
-                        'rule': 'code_todo_comment',
-                        'desc': 'TODO in comment (track in issue system instead)',
-                        'line': i,
-                        'text': line.strip()[:60]
-                    })
-    
-    def check_what_vs_why(self, lines):
-        '''Detect comments that explain WHAT instead of WHY.'''
-        what_patterns = [
-            r'#\s*(this\s+)?(function|method|loop)\s+(does|returns|checks)',
-            r'#\s*(this\s+)?(variable|field)\s+(holds|stores|contains)',
-            r'//\s*(this\s+)?(function|method|loop)\s+(does|returns|checks)',
-            r'//\s*(this\s+)?(variable|field)\s+(holds|stores|contains)',
-        ]
-        
-        for i, line in enumerate(lines, 1):
-            for pattern in what_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    self.violations.append({
-                        'rule': 'code_what_not_why',
-                        'desc': 'Comment explains WHAT, not WHY',
-                        'line': i,
-                        'text': line.strip()[:60]
-                    })
-
-
-def check_code_comments(lines):
-    '''Run code comment analysis.'''
-    analyzer = CodeCommentAnalyzer()
     return analyzer.analyze(lines)
