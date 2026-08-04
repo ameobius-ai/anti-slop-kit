@@ -40,8 +40,12 @@ charged twice.
 
 | File | Words | Violations | Score | Longest sentence |
 | --- | --- | --- | --- | --- |
-| `ru/samples/baseline.md` | 117 | 46 | 39.32 | 27 words |
+| `ru/samples/baseline.md` | 117 | 40 | 34.19 | 27 words |
 | `ru/samples/utr.md` | 94 | 0 | 0.00 | 11 words |
+
+> These Russian numbers are **post-#34**: the technical-register allowlist
+> (issue #33) no longer counts nominalizations and participles built on
+> technical stems. Pre-fix, the baseline scored 46 / 39.32.
 
 The Russian numbers did not move when the Russian lists grew: none of the new
 entries appear in either Russian sample. A lexicon addition that changes no
@@ -52,8 +56,8 @@ Baseline by category, per 100 words:
 
 | Category | Count | Per 100 words |
 | --- | --- | --- |
-| nominalization | 12 | 10.26 |
-| participle | 9 | 7.69 |
+| nominalization | 9 | 7.69 |
+| participle | 6 | 5.13 |
 | clerical | 8 | 6.84 |
 | marketing | 5 | 4.27 |
 | long_sentence (>20w) | 3 | 2.56 |
@@ -87,6 +91,10 @@ Mean violations per 100 words, lower is cleaner:
 | --- | --- | --- | --- | --- |
 | EN | 5.78 | 7.89 | 5.18 | **2.64** |
 | RU | 10.73 | 10.70 | 9.59 | **7.22** |
+
+> The RU row is **pre-fix** (linter before PR #34). Re-scored with the
+> allowlist: bare 10.73, plain 6.80, banlist 3.63, skill **2.00** — RU skill
+> at parity with EN (2.00 vs 2.64), same note as `evals/README.md`.
 
 The skill wins both languages against every control, including the ban list.
 That ban-list column is the interesting one: handing the model a word blacklist
