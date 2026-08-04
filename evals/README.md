@@ -58,6 +58,40 @@ python3 evals/score.py evals/outputs-en
 reads that naming convention, scores every file with the linter for its
 language, and reports the mean per condition.
 
+## What a run leaves behind
+
+The scoring copies in `--out` are working files: they get re-scored, edited and
+overwritten. Every invocation also writes a record that is meant to stay
+untouched and to be committed:
+
+```
+evals/runs/20260804T153000Z__en__deepseek-v4-flash-free/
+    manifest.json         model, endpoint, prompt digests, one entry per cell
+    prompts/skill.txt     the exact system prompt that was sent
+    raw/<cell>.json       the unedited response body
+    outputs/<cell>.md     the answer as generated
+```
+
+The record answers the questions a score cannot: which prompt produced this
+text, from which model, on which endpoint, and what the API actually returned.
+The prompt is stored whole and by digest, so two runs can be compared without
+diffing files. The API key is never written: only the scheme, host and path of
+the endpoint reach the manifest, and a key passed in a query string or in
+userinfo is stripped.
+
+Every cell appears in `manifest.json`, including the ones that produced no new
+text. A cell whose output file already exists is recorded as `skipped_existing`
+and a failed call is recorded as `failed` with its error, because a resumed run
+that writes nothing used to look exactly like a run that never happened. If a
+run generates nothing at all, `run.py` says so on stderr.
+
+The first live run, on 2026-08-04, predates all of this. Only its scored copies
+were kept, and they are gone: the numbers above cannot be re-scored against a
+newer linter, and the before/after pairs in `examples/` had to be written by
+hand instead of taken from real `bare` output. That is the gap this record
+closes, and it is why the run scores here are reported with a date and a model
+rather than as a property of the kit.
+
 ## Read the output honestly
 
 - The linter measures register, not correctness. A condition can win on score
@@ -65,6 +99,8 @@ language, and reports the mean per condition.
 - Report the model name and date. A result from one model does not transfer;
   the source experiment this kit builds on found the ban-list condition helped
   one model and barely moved another.
-- Run each cell three times. Single samples from a sampling process are noise.
+- Run each cell three times (`--repeat 3`). Single samples from a sampling
+  process are noise, and the repeats land as separate cells (`__r2`, `__r3`) so
+  the spread stays visible instead of being averaged away at write time.
 - Check task-level results, not only the mean. In the source experiment the
   skill made one task of six worse.
