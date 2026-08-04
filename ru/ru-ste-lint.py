@@ -602,3 +602,121 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+
+
+# === CODE COMMENT ANALYSIS (RU) ===
+
+class CodeCommentAnalyzer:
+    '''Анализирует комментарии в коде на предмет проблем качества.'''
+    
+    def __init__(self):
+        self.violations = []
+    
+    def analyze(self, lines):
+        '''Запустить все проверки комментариев в коде.'''
+        self.check_comment_density(lines)
+        self.check_obvious_comments(lines)
+        self.check_todo_in_comments(lines)
+        self.check_what_vs_why(lines)
+        return self.violations
+    
+    def check_comment_density(self, lines):
+        '''Проверить соотношение комментариев к коду.'''
+        code_lines = 0
+        comment_lines = 0
+        
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith('#'):
+                comment_lines += 1
+            elif stripped.startswith('//') or stripped.startswith('/*'):
+                comment_lines += 1
+            else:
+                code_lines += 1
+        
+        if code_lines == 0:
+            return
+        
+        ratio = comment_lines / code_lines
+        
+        if ratio < 0.05 and code_lines > 20:
+            self.violations.append({
+                'rule': 'code_low_comment_ratio',
+                'desc': f'Очень низкое соотношение комментариев ({ratio:.1%}) для {code_lines} строк кода',
+                'line': 0,
+                'text': f'{comment_lines} комментариев, {code_lines} кода'
+            })
+        
+        if ratio > 0.80 and comment_lines > 10:
+            self.violations.append({
+                'rule': 'code_high_comment_ratio',
+                'desc': f'Очень высокое соотношение комментариев ({ratio:.1%})',
+                'line': 0,
+                'text': f'{comment_lines} комментариев, {code_lines} кода'
+            })
+    
+    def check_obvious_comments(self, lines):
+        '''Обнаружить комментарии, которые просто повторяют код.'''
+        obvious_patterns = [
+            (r'#\s*инкремент\s*(счётчик|переменн|i|j|k)\s*$', 'очевидно: инкремент'),
+            (r'#\s*вернуть\s*(значение|результат)\s*$', 'очевидно: вернуть'),
+            (r'//\s*инкремент\s*(счётчик|переменн|i|j|k)\s*$', 'очевидно: инкремент'),
+            (r'//\s*вернуть\s*(значение|результат)\s*$', 'очевидно: вернуть'),
+        ]
+        
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            for pattern, desc in obvious_patterns:
+                if re.search(pattern, stripped, re.IGNORECASE):
+                    self.violations.append({
+                        'rule': 'code_obvious_comment',
+                        'desc': desc,
+                        'line': i,
+                        'text': stripped[:60]
+                    })
+    
+    def check_todo_in_comments(self, lines):
+        '''Обнаружить TODO комментарии, которые следует отслеживать отдельно.'''
+        todo_patterns = [
+            r'#\s*TODO\b',
+            r'#\s*FIXME\b',
+            r'//\s*TODO\b',
+            r'//\s*FIXME\b',
+        ]
+        
+        for i, line in enumerate(lines, 1):
+            for pattern in todo_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    self.violations.append({
+                        'rule': 'code_todo_comment',
+                        'desc': 'TODO в комментарии (отслеживайте в системе issues)',
+                        'line': i,
+                        'text': line.strip()[:60]
+                    })
+    
+    def check_what_vs_why(self, lines):
+        '''Обнаружить комментарии, объясняющие ЧТО вместо ПОЧЕМУ.'''
+        what_patterns = [
+            r'#\s*(эта\s+)?(функция|метод|цикл)\s+(делает|возвращает|проверяет)',
+            r'#\s*(эта\s+)?(переменн|поле)\s+(содержит|хранит)',
+            r'//\s*(эта\s+)?(функция|метод|цикл)\s+(делает|возвращает|проверяет)',
+            r'//\s*(эта\s+)?(переменн|поле)\s+(содержит|хранит)',
+        ]
+        
+        for i, line in enumerate(lines, 1):
+            for pattern in what_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    self.violations.append({
+                        'rule': 'code_what_not_why',
+                        'desc': 'Комментарий объясняет ЧТО, а не ПОЧЕМУ',
+                        'line': i,
+                        'text': line.strip()[:60]
+                    })
+
+
+def check_code_comments(lines):
+    '''Запустить анализ комментариев в коде.'''
+    analyzer = CodeCommentAnalyzer()
+    return analyzer.analyze(lines)
