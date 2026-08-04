@@ -35,8 +35,11 @@ ru/ru-ste-lint.py        Russian linter, 13 rule groups + typography
 ru/samples/              one slop text and one clean rewrite
 harness/SKILL.md         separate skill: how to design an agent harness
 evals/                   eval harness: 12 tasks, 4 conditions, scorer, runner
-tests/                   112 tests, standard library only
+examples/                five before/after pairs with measured scores
+tests/                   unittest suite, standard library only
+scripts/check.sh         the whole gate: tests, then the sample linters
 hooks/pre-commit         git hook that blocks a commit above the limit
+hooks/pre-push           git hook that runs the whole gate before a push
 .pre-commit-config.example.yaml
 RESULTS.md               measured scores and their limits
 CONTRIBUTING.md          how to contribute rules, tests, and fixes
@@ -64,6 +67,32 @@ python3 -m unittest discover -s tests
 No dependencies. Python 3.9 or later. The linters use the standard library only,
 because a skill directory is copied as a unit and must keep working after the copy.
 
+## The gate
+
+One entry point runs everything this project checks:
+
+```sh
+bash scripts/check.sh          # tests, then the sample linters
+bash scripts/check.sh tests
+bash scripts/check.sh lint
+```
+
+`.github/workflows/ci.yml` calls the same script, so a green local run and a
+green CI run cannot disagree about what they checked.
+
+GitHub Actions is disabled at the account level for the account that hosts this
+repository: `POST /actions/workflows/ci.yml/dispatches` answers 422, `Actions
+has been disabled for this user`. Until that is lifted the workflow never runs
+here, and the local hooks are the only enforcement that exists:
+
+```sh
+ln -s ../../hooks/pre-commit .git/hooks/pre-commit   # blocks one bad file
+ln -s ../../hooks/pre-push   .git/hooks/pre-push     # blocks a bad push
+```
+
+The workflow file stays in the tree because a fork with Actions enabled runs it
+unchanged.
+
 ## Score
 
 The score is violations per 100 words. Lower is cleaner.
@@ -72,7 +101,7 @@ The score is violations per 100 words. Lower is cleaner.
 | --- | --- | --- |
 | `en/samples/baseline.md` | 33.12 | 49 words |
 | `en/samples/ste.md` | 0.83 | 14 words |
-| `ru/samples/baseline.md` | 39.32 | 27 words |
+| `ru/samples/baseline.md` | 34.19 | 27 words |
 | `ru/samples/utr.md` | 0.00 | 11 words |
 
 Read `RESULTS.md` before you quote these numbers. Two texts per language is a
@@ -86,7 +115,7 @@ comes from it yet.
 
 The RU side is not a translation of the EN side. English plain-language tooling
 is crowded; a deterministic Russian linter is rare. It targets канцелярит,
-отглагольные существительные, цепочки родительных падежей and причастные
+отглагольные существительные, цепочки родительного падежа and причастные
 обороты, plus typography (ёлочки, тире), against ГОСТ Р 58049-2017 §8.2.3 (УТР).
 It carries its own lexicon, its own morphology handling (ё-folding, a participle
 stoplist), and its own samples and scores.
@@ -133,6 +162,27 @@ draft.md                     words=  412 total=   9 per100w=  2.18 maxsent= 24
   L14    passive_voice         'is handled'                           Name the actor. Use active voice.
   L22    banned_word           'utilize'                              Use 'use' instead.
 ```
+
+## Split the score
+
+One total hides two different problems. `--breakdown` prints them apart: `slop`
+counts banned words, marketing adjectives, AI filler and hedges; `cl` counts the
+controlled-language mechanics, which are sentence length, passive voice,
+nominalizations and participle chains.
+
+```sh
+python3 ru/ru-ste-lint.py --breakdown ru/samples/baseline.md
+python3 en/ste-lint.py --only slop docs/draft.md
+```
+
+```text
+baseline.md            words=  117 total=  40 per100w= 34.19 maxsent= 27 slop=  15 cl=  25
+```
+
+The split changes what you do next. In `ru/samples/baseline.md`, 25 of the 40
+findings are structural, so a search for banned words finds 15 and misses the
+larger half. `--only slop` and `--only cl` gate on one component alone, which
+helps when a document class tolerates long sentences but not marketing language.
 
 ## GitHub Actions annotations
 
