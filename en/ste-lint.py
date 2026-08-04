@@ -508,3 +508,134 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+
+
+# === MARKDOWN STRUCTURE ANALYSIS ===
+
+class MarkdownStructureAnalyzer:
+    '''Analyzes markdown document structure for quality issues.'''
+    
+    def __init__(self):
+        self.violations = []
+    
+    def analyze(self, lines):
+        '''Run all markdown structure checks.'''
+        self.check_heading_hierarchy(lines)
+        self.check_section_lengths(lines)
+        self.check_code_blocks(lines)
+        self.check_list_abuse(lines)
+        return self.violations
+    
+    def check_heading_hierarchy(self, lines):
+        '''Check that heading levels don't skip (e.g., H1 -> H3).'''
+        prev_level = 0
+        for i, line in enumerate(lines, 1):
+            if line.startswith('#'):
+                level = len(line.split()[0])
+                if prev_level > 0 and level > prev_level + 1:
+                    self.violations.append({
+                        'rule': 'md_heading_skip',
+                        'desc': f'Heading level jumps from H{prev_level} to H{level}',
+                        'line': i,
+                        'text': line.strip()[:60]
+                    })
+                prev_level = level
+    
+    def check_section_lengths(self, lines):
+        '''Check for sections that are too long (>30 lines) or too short (<2 lines).'''
+        section_start = 0
+        section_heading = None
+        
+        for i, line in enumerate(lines, 1):
+            if line.startswith('#'):
+                # Check previous section
+                if section_heading and section_start > 0:
+                    length = i - section_start - 1
+                    if length > 30:
+                        self.violations.append({
+                            'rule': 'md_section_too_long',
+                            'desc': f'Section has {length} lines (max 30)',
+                            'line': section_start,
+                            'text': section_heading.strip()[:60]
+                        })
+                    elif length < 2 and length > 0:
+                        self.violations.append({
+                            'rule': 'md_section_too_short',
+                            'desc': f'Section has only {length} line(s)',
+                            'line': section_start,
+                            'text': section_heading.strip()[:60]
+                        })
+                
+                section_start = i
+                section_heading = line
+        
+        # Check last section
+        if section_heading and section_start > 0:
+            length = len(lines) - section_start
+            if length > 30:
+                self.violations.append({
+                    'rule': 'md_section_too_long',
+                    'desc': f'Final section has {length} lines (max 30)',
+                    'line': section_start,
+                    'text': section_heading.strip()[:60]
+                })
+    
+    def check_code_blocks(self, lines):
+        '''Check that code blocks specify language.'''
+        in_code_block = False
+        code_block_start = 0
+        
+        for i, line in enumerate(lines, 1):
+            if line.strip().startswith('\x60\x60\x60'):  # Use hex for backticks
+                if not in_code_block:
+                    # Opening fence
+                    in_code_block = True
+                    code_block_start = i
+                    # Check if language is specified
+                    fence = line.strip()
+                    if len(fence) == 3 or fence.endswith(' '):
+                        self.violations.append({
+                            'rule': 'md_code_no_lang',
+                            'desc': 'Code block without language specification',
+                            'line': i,
+                            'text': line.strip()
+                        })
+                else:
+                    # Closing fence
+                    in_code_block = False
+    
+    def check_list_abuse(self, lines):
+        '''Detect excessive list usage (>5 consecutive list items).'''
+        list_count = 0
+        list_start = 0
+        
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith('-') or stripped.startswith('*') or stripped.startswith('+'):
+                if list_count == 0:
+                    list_start = i
+                list_count += 1
+            else:
+                if list_count > 5:
+                    self.violations.append({
+                        'rule': 'md_list_abuse',
+                        'desc': f'Long list with {list_count} items (consider prose or table)',
+                        'line': list_start,
+                        'text': f'List starts here'
+                    })
+                list_count = 0
+        
+        # Check if document ends with long list
+        if list_count > 5:
+            self.violations.append({
+                'rule': 'md_list_abuse',
+                'desc': f'Long list with {list_count} items at end (consider prose or table)',
+                'line': list_start,
+                'text': f'List starts here'
+            })
+
+
+def check_markdown_structure(lines):
+    '''Run markdown structure analysis.'''
+    analyzer = MarkdownStructureAnalyzer()
+    return analyzer.analyze(lines)
