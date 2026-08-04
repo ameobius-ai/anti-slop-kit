@@ -759,10 +759,10 @@ class CodeCommentAnalyzer:
     
     def check_obvious_comments(self, lines):
         obvious_patterns = [
-            (r'#\s*инкремент\s*(счётчик|переменн|i|j|k)\s*$', 'очевидно: инкремент'),
-            (r'#\s*вернуть\s*(значение|результат)\s*$', 'очевидно: вернуть'),
-            (r'//\s*инкремент\s*(счётчик|переменн|i|j|k)\s*$', 'очевидно: инкремент'),
-            (r'//\s*вернуть\s*(значение|результат)\s*$', 'очевидно: вернуть'),
+            (r'#\s*инкремент\s*(счётчик\w*|счетчик\w*|переменн\w*|i|j|k)\s*$', 'очевидно: инкремент'),
+            (r'#\s*вернуть\s*(значение\w*|результат\w*)\s*$', 'очевидно: вернуть'),
+            (r'//\s*инкремент\s*(счётчик\w*|счетчик\w*|переменн\w*|i|j|k)\s*$', 'очевидно: инкремент'),
+            (r'//\s*вернуть\s*(значение\w*|результат\w*)\s*$', 'очевидно: вернуть'),
         ]
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
@@ -777,10 +777,10 @@ class CodeCommentAnalyzer:
     
     def check_todo_in_comments(self, lines):
         todo_patterns = [
-            r'#\s*TODO',
-            r'#\s*FIXME',
-            r'//\s*TODO',
-            r'//\s*FIXME',
+            r'#\s*TODO\b',
+            r'#\s*FIXME\b',
+            r'//\s*TODO\b',
+            r'//\s*FIXME\b',
         ]
         for i, line in enumerate(lines, 1):
             for pattern in todo_patterns:
