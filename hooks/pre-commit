@@ -25,6 +25,15 @@ fi
 
 status=0
 for f in $STAGED; do
+  # Some files are slop by design: the before texts in the examples/ gallery
+  # and the baseline samples the linters are calibrated against. Linting them
+  # would block every commit that touches them.
+  case "$f" in
+    examples/*/before*.md|*/samples/baseline.md)
+      echo "anti-slop: skipping $f (slop by design)"
+      continue
+      ;;
+  esac
   case "$f" in
     ru/*|*.ru.md) linter="$ROOT/ru/ru-ste-lint.py" ;;
     *)            linter="$ROOT/en/ste-lint.py" ;;
