@@ -1,0 +1,33 @@
+#!/bin/sh
+# Run the whole gate before a push.
+#
+# GitHub Actions is disabled at the account level for the account that hosts
+# this repository, so ci.yml has never produced a check run: every pull request
+# here has zero. Nothing verifies a branch after it leaves the machine, which
+# makes this hook the last checkpoint that runs at all.
+#
+# Install:
+#   ln -s ../../hooks/pre-push .git/hooks/pre-push
+#
+# Skip once:
+#   git push --no-verify
+#
+# The pre-commit hook lints one staged file at a time. This one runs the same
+# gate CI would run, so a push cannot carry a red suite.
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+
+echo "anti-slop: running scripts/check.sh before the push"
+
+if [ ! -f "$ROOT/scripts/check.sh" ]; then
+	echo "anti-slop: scripts/check.sh is missing, nothing to run" >&2
+	exit 1
+fi
+
+if bash "$ROOT/scripts/check.sh" all; then
+	exit 0
+fi
+
+echo "anti-slop: the gate failed, push aborted" >&2
+echo "anti-slop: fix it, or push with --no-verify if you mean to" >&2
+exit 1

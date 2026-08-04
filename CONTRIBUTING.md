@@ -68,18 +68,33 @@ uninstalled.
 Or individually:
 
 ```sh
+bash scripts/check.sh
+```
+
+Or one piece at a time:
+
+```sh
 python3 -m unittest discover -s tests
 python3 en/ste-lint.py en/samples/baseline.md en/samples/ste.md
 python3 ru/ru-ste-lint.py ru/samples/baseline.md ru/samples/utr.md
+```
+
+GitHub Actions is disabled at the account level for the account that hosts this
+repository, so no pull request here gets a check run. Run the gate locally and
+quote the output, and install both hooks:
+
+```sh
+ln -s ../../hooks/pre-commit .git/hooks/pre-commit
+ln -s ../../hooks/pre-push   .git/hooks/pre-push
 ```
 
 Expected scores (from `RESULTS.md`):
 
 | Text | Score | Longest sentence |
 | --- | --- | --- |
-| `en/samples/baseline.md` | 31.85 | 49 words |
+| `en/samples/baseline.md` | 33.12 | 49 words |
 | `en/samples/ste.md` | 0.83 | 14 words |
-| `ru/samples/baseline.md` | 39.32 | 27 words |
+| `ru/samples/baseline.md` | 34.19 | 27 words |
 | `ru/samples/utr.md` | 0.00 | 11 words |
 
 If your numbers differ and you did not intend to change scoring, something
