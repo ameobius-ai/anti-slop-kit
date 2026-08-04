@@ -602,3 +602,112 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+
+
+# === АНАЛИЗ СТРУКТУРЫ MARKDOWN ===
+
+class MarkdownStructureAnalyzer:
+    def __init__(self):
+        self.violations = []
+    
+    def analyze(self, lines):
+        self.check_heading_hierarchy(lines)
+        self.check_section_lengths(lines)
+        self.check_code_blocks(lines)
+        self.check_list_abuse(lines)
+        return self.violations
+    
+    def check_heading_hierarchy(self, lines):
+        prev_level = 0
+        for i, line in enumerate(lines, 1):
+            if line.startswith('#'):
+                level = len(line.split()[0])
+                if prev_level > 0 and level > prev_level + 1:
+                    self.violations.append({
+                        'rule': 'md_heading_skip',
+                        'desc': f'Заголовок прыгает с H{prev_level} на H{level}',
+                        'line': i,
+                        'text': line.strip()[:60]
+                    })
+                prev_level = level
+    
+    def check_section_lengths(self, lines):
+        section_start = 0
+        section_heading = None
+        for i, line in enumerate(lines, 1):
+            if line.startswith('#'):
+                if section_heading and section_start > 0:
+                    length = i - section_start - 1
+                    if length > 30:
+                        self.violations.append({
+                            'rule': 'md_section_too_long',
+                            'desc': f'Раздел содержит {length} строк (макс 30)',
+                            'line': section_start,
+                            'text': section_heading.strip()[:60]
+                        })
+                    elif length < 2 and length > 0:
+                        self.violations.append({
+                            'rule': 'md_section_too_short',
+                            'desc': f'Раздел содержит только {length} строку(и)',
+                            'line': section_start,
+                            'text': section_heading.strip()[:60]
+                        })
+                section_start = i
+                section_heading = line
+        if section_heading and section_start > 0:
+            length = len(lines) - section_start
+            if length > 30:
+                self.violations.append({
+                    'rule': 'md_section_too_long',
+                    'desc': f'Последний раздел содержит {length} строк (макс 30)',
+                    'line': section_start,
+                    'text': section_heading.strip()[:60]
+                })
+    
+    def check_code_blocks(self, lines):
+        in_code_block = False
+        for i, line in enumerate(lines, 1):
+            if line.strip().startswith('`' + '`' + '`'):
+                if not in_code_block:
+                    in_code_block = True
+                    fence = line.strip()
+                    if len(fence) == 3 or fence.endswith(' '):
+                        self.violations.append({
+                            'rule': 'md_code_no_lang',
+                            'desc': 'Блок кода без указания языка',
+                            'line': i,
+                            'text': line.strip()
+                        })
+                else:
+                    in_code_block = False
+    
+    def check_list_abuse(self, lines):
+        list_count = 0
+        list_start = 0
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith('-') or stripped.startswith('*') or stripped.startswith('+'):
+                if list_count == 0:
+                    list_start = i
+                list_count += 1
+            else:
+                if list_count > 5:
+                    self.violations.append({
+                        'rule': 'md_list_abuse',
+                        'desc': f'Длинный список из {list_count} элементов',
+                        'line': list_start,
+                        'text': 'Список начинается здесь'
+                    })
+                list_count = 0
+        if list_count > 5:
+            self.violations.append({
+                'rule': 'md_list_abuse',
+                'desc': f'Длинный список из {list_count} элементов в конце',
+                'line': list_start,
+                'text': 'Список начинается здесь'
+            })
+
+
+def check_markdown_structure(lines):
+    analyzer = MarkdownStructureAnalyzer()
+    return analyzer.analyze(lines)
