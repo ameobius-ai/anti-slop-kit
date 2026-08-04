@@ -107,7 +107,7 @@
 +                print("ERROR: --only needs slop or cl", file=sys.stderr)
 +                return 2
 +            only = argv[i]
-        elif a.startswith("--only="):
++        elif a.startswith("--only="):
 +            only = a.split("=", 1)[1]
 +            if only not in ("slop", "cl"):
 +                print(f"ERROR: unknown component {only}", file=sys.stderr)
