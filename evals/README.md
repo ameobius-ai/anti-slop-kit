@@ -104,3 +104,8 @@ rather than as a property of the kit.
   the spread stays visible instead of being averaged away at write time.
 - Check task-level results, not only the mean. In the source experiment the
   skill made one task of six worse.
+
+
+## Task en-07: System Prompt
+
+Added 2026-08-05. Tests prompt engineering quality for CI/CD code review agents. Measures specificity of role definition, evaluation criteria, and output format.
