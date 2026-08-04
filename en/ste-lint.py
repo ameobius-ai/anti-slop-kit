@@ -401,44 +401,29 @@ def _gh_escape(v):
     return v.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
-def select(rows, only):
-    """Keep the diagnostics that belong to the component being gated.
-
-    --only moved the threshold and nothing else. `--only slop` still printed
-    every controlled-language finding and still reported the combined score,
-    so the output argued for edits the gate was not asking for.
-    """
-    if only not in ("slop", "cl"):
-        return rows
-    want_slop = only == "slop"
-    return [row for row in rows if (row[1] in SLOP_CATEGORIES) == want_slop]
-
-
 def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
            breakdown=False, only=None):
-    count, metric, label = r["total"], r["total_per100w"], "per 100 words"
-    if only == "slop":
-        count, metric, label = r["slop"], r["slop_per100w"], "slop per 100 words"
-    elif only == "cl":
-        count, metric, label = r["cl"], r["cl_per100w"], "cl per 100 words"
     if as_json:
         print(json.dumps({name: r}, ensure_ascii=False, indent=2))
     else:
         line = (f"{os.path.basename(name):28} words={r['words']:5d} "
-                f"total={count:4d} per100w={metric:6.2f} "
+                f"total={r['total']:4d} per100w={r['total_per100w']:6.2f} "
                 f"maxsent={r['longest_sentence_words']:3d}")
         if breakdown:
             line += f" slop={r['slop']:4d} cl={r['cl']:4d}"
-        if only:
-            line += f" only={only}"
         print(line)
     if text is not None and fmt == "github" and not as_json:
-        for line, cat, match, sug in select(diagnostics(text), only):
+        for line, cat, match, sug in diagnostics(text):
             print(f"::warning file={name},line={line},title={cat}::"
                   f"{_gh_escape(match)} -- {_gh_escape(sug)}")
     elif text is not None and explain and not as_json:
-        for line, cat, match, sug in select(diagnostics(text), only):
+        for line, cat, match, sug in diagnostics(text):
             print(f"  L{line:<5} {cat:22} {match!r:40} {sug}")
+    metric, label = r["total_per100w"], "per 100 words"
+    if only == "slop":
+        metric, label = r["slop_per100w"], "slop per 100 words"
+    elif only == "cl":
+        metric, label = r["cl_per100w"], "cl per 100 words"
     if max_score is not None and metric > max_score:
         print(f"FAIL {name}: {metric:.2f} {label} "
               f"is above the limit of {max_score:.2f}", file=sys.stderr)
@@ -525,145 +510,14 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 
 
-# === MARKDOWN STRUCTURE ANALYSIS ===
-
-class MarkdownStructureAnalyzer:
-    '''Analyzes markdown document structure for quality issues.'''
-    
-    def __init__(self):
-        self.violations = []
-    
-    def analyze(self, lines):
-        '''Run all markdown structure checks.'''
-        self.check_heading_hierarchy(lines)
-        self.check_section_lengths(lines)
-        self.check_code_blocks(lines)
-        self.check_list_abuse(lines)
-        return self.violations
-    
-    def check_heading_hierarchy(self, lines):
-        '''Check that heading levels don't skip (e.g., H1 -> H3).'''
-        prev_level = 0
-        for i, line in enumerate(lines, 1):
-            if line.startswith('#'):
-                level = len(line.split()[0])
-                if prev_level > 0 and level > prev_level + 1:
-                    self.violations.append({
-                        'rule': 'md_heading_skip',
-                        'desc': f'Heading level jumps from H{prev_level} to H{level}',
-                        'line': i,
-                        'text': line.strip()[:60]
-                    })
-                prev_level = level
-    
-    def check_section_lengths(self, lines):
-        '''Check for sections that are too long (>30 lines) or too short (<2 lines).'''
-        section_start = 0
-        section_heading = None
-        
-        for i, line in enumerate(lines, 1):
-            if line.startswith('#'):
-                # Check previous section
-                if section_heading and section_start > 0:
-                    length = i - section_start - 1
-                    if length > 30:
-                        self.violations.append({
-                            'rule': 'md_section_too_long',
-                            'desc': f'Section has {length} lines (max 30)',
-                            'line': section_start,
-                            'text': section_heading.strip()[:60]
-                        })
-                    elif length < 2 and length > 0:
-                        self.violations.append({
-                            'rule': 'md_section_too_short',
-                            'desc': f'Section has only {length} line(s)',
-                            'line': section_start,
-                            'text': section_heading.strip()[:60]
-                        })
-                
-                section_start = i
-                section_heading = line
-        
-        # Check last section
-        if section_heading and section_start > 0:
-            length = len(lines) - section_start
-            if length > 30:
-                self.violations.append({
-                    'rule': 'md_section_too_long',
-                    'desc': f'Final section has {length} lines (max 30)',
-                    'line': section_start,
-                    'text': section_heading.strip()[:60]
-                })
-    
-    def check_code_blocks(self, lines):
-        '''Check that code blocks specify language.'''
-        in_code_block = False
-        code_block_start = 0
-        
-        for i, line in enumerate(lines, 1):
-            if line.strip().startswith('\x60\x60\x60'):  # Use hex for backticks
-                if not in_code_block:
-                    # Opening fence
-                    in_code_block = True
-                    code_block_start = i
-                    # Check if language is specified
-                    fence = line.strip()
-                    if len(fence) == 3 or fence.endswith(' '):
-                        self.violations.append({
-                            'rule': 'md_code_no_lang',
-                            'desc': 'Code block without language specification',
-                            'line': i,
-                            'text': line.strip()
-                        })
-                else:
-                    # Closing fence
-                    in_code_block = False
-    
-    def check_list_abuse(self, lines):
-        '''Detect excessive list usage (>5 consecutive list items).'''
-        list_count = 0
-        list_start = 0
-        
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-            if stripped.startswith('-') or stripped.startswith('*') or stripped.startswith('+'):
-                if list_count == 0:
-                    list_start = i
-                list_count += 1
-            else:
-                if list_count > 5:
-                    self.violations.append({
-                        'rule': 'md_list_abuse',
-                        'desc': f'Long list with {list_count} items (consider prose or table)',
-                        'line': list_start,
-                        'text': f'List starts here'
-                    })
-                list_count = 0
-        
-        # Check if document ends with long list
-        if list_count > 5:
-            self.violations.append({
-                'rule': 'md_list_abuse',
-                'desc': f'Long list with {list_count} items at end (consider prose or table)',
-                'line': list_start,
-                'text': f'List starts here'
-            })
-
-
-def check_markdown_structure(lines):
-    '''Run markdown structure analysis.'''
-    analyzer = MarkdownStructureAnalyzer()
-    return analyzer.analyze(lines)
-
-
 # === CODE COMMENT ANALYSIS ===
 
 class CodeCommentAnalyzer:
     '''Analyzes code comments for quality issues.'''
-
+    
     def __init__(self):
         self.violations = []
-
+    
     def analyze(self, lines):
         '''Run all code comment checks.'''
         self.check_comment_density(lines)
