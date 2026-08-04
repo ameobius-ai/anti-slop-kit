@@ -77,6 +77,48 @@ class EndpointRecording(unittest.TestCase):
                          "http://127.0.0.1:8317/v1")
 
 
+class Prompts(unittest.TestCase):
+    """The prompts are the payload of the experiment, and nothing read them.
+
+    The Russian prompts were briefly written into the source as \\u041f-style
+    escapes. That turned out to be harmless: Python decodes those escapes in a
+    normal string literal at import, so the run would have been correct. The
+    point stands anyway. No test could tell that file apart from one where the
+    escapes had leaked into the string as text, which is what a raw literal or
+    a docstring would have produced. These checks read the prompts the way the
+    API receives them.
+    """
+
+    def test_the_russian_prompts_are_cyrillic(self):
+        prompts = run.prompts("ru")
+        for condition in ("plain", "banlist", "skill"):
+            text = prompts[condition]
+            self.assertTrue(any("\u0410" <= ch <= "\u044f" for ch in text),
+                            "the ru %s prompt has no Cyrillic in it" % condition)
+
+    def test_no_prompt_carries_an_unrendered_escape(self):
+        for lang in ("en", "ru"):
+            for condition, text in run.prompts(lang).items():
+                self.assertNotIn("\\u", text,
+                                 "the %s %s prompt holds a literal escape"
+                                 % (lang, condition))
+
+    def test_bare_sends_no_system_prompt(self):
+        """bare is the control. An instruction here would void the comparison."""
+        for lang in ("en", "ru"):
+            self.assertEqual(run.prompts(lang)["bare"], "")
+
+    def test_the_skill_prompt_is_the_shipped_skill(self):
+        for lang in ("en", "ru"):
+            shipped = (ROOT / lang / "SKILL.md").read_text(encoding="utf-8")
+            self.assertEqual(run.prompts(lang)["skill"], shipped)
+
+    def test_the_four_conditions_have_distinct_prompts(self):
+        for lang in ("en", "ru"):
+            texts = list(run.prompts(lang).values())
+            self.assertEqual(len(texts), len(set(texts)))
+
+
 class RunRecords(unittest.TestCase):
     def go(self, caller, existing=None, repeat=1):
         self.tmp = tempfile.TemporaryDirectory()
