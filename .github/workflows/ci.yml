@@ -1,36 +1,102 @@
-name: ci
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
+    branches: [main]
 
 jobs:
   test:
-    name: tests (python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    
     strategy:
-      fail-fast: false
       matrix:
-        python-version: ["3.9", "3.11", "3.13"]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run the test half of the gate
-        run: bash scripts/check.sh tests
+      
+      - name: Run full gate
+        run: bash scripts/check.sh
+      
+      - name: Validate documented numbers
+        run: python3 tests/test_documented_numbers.py
+      
+      - name: Run eval scripts syntax check
+        run: python3 -m py_compile evals/run.py evals/score.py
+      
+      - name: Check sample scores
+        run: |
+          echo "=== English samples ==="
+          python3 en/ste-lint.py en/samples/baseline.md en/samples/ste.md
+          echo ""
+          echo "=== Russian samples ==="
+          python3 ru/ru-ste-lint.py ru/samples/baseline.md ru/samples/utr.md
+      
+      - name: Verify test count
+        run: |
+          TEST_COUNT=$(python3 -m unittest discover -s tests 2>&1 | grep -o "Ran [0-9]* test" | grep -o "[0-9]*")
+          echo "Tests run: $TEST_COUNT"
+          if [ "$TEST_COUNT" -lt 100 ]; then
+            echo "::error::Test count ($TEST_COUNT) is below expected minimum (100)"
+            exit 1
+          fi
 
-  self-lint:
-    name: the clean samples must stay clean
+  lint:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-      - name: Run the lint half of the gate
-        env:
-          ANTI_SLOP_FORMAT: github
-        run: bash scripts/check.sh lint
+          python-version: '3.11'
+      
+      - name: Check Python syntax
+        run: |
+          python3 -m py_compile en/ste-lint.py
+          python3 -m py_compile ru/ru-ste-lint.py
+          find evals -name "*.py" -exec python3 -m py_compile {} \;
+      
+      - name: Verify no trailing whitespace in linters
+        run: |
+          if grep -n " $" en/ste-lint.py ru/ru-ste-lint.py; then
+            echo "::error::Trailing whitespace found in linter files"
+            exit 1
+          fi
+      
+      - name: Check for TODO/FIXME in code
+        run: |
+          if grep -rn "TODO\|FIXME" en/ ru/ evals/ scripts/ --include="*.py" --include="*.sh"; then
+            echo "::warning::TODO/FIXME comments found (not blocking)"
+          fi
+
+  docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Verify README exists and is non-empty
+        run: |
+          if [ ! -s README.md ]; then
+            echo "::error::README.md is missing or empty"
+            exit 1
+          fi
+      
+      - name: Check for broken markdown links
+        run: |
+          # Simple check for common broken link patterns
+          if grep -n "\[.*\](#" README.md | grep -v "\[.*\](#.*" ; then
+            echo "::warning::Potential broken anchor links in README.md"
+          fi
