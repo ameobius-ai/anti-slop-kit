@@ -6,6 +6,9 @@ A corrupted REPLACE key in the Russian linter survived several commits:
 the file parsed, every test passed, and the rule it belonged to had
 silently stopped working. The only visible trace was a byte count.
 
+Claims that documents make about numbers live in test_documented_numbers.py.
+This file is about bytes.
+
 The guards in test_linters.py cover five named files. These cover the
 whole tree, so a new file is protected the day it is added rather than
 the day someone remembers to list it.
@@ -88,6 +91,39 @@ class RepositoryBytes(unittest.TestCase):
                 continue
             self.assertTrue(raw.endswith(LF),
                             "%s has no final newline" % path.relative_to(ROOT))
+
+
+CI_WORKFLOW = pathlib.Path(".github/workflows/ci.yml")
+GATE = pathlib.Path("scripts/check.sh")
+
+
+class TheGateIsOneScript(unittest.TestCase):
+    """CI and a developer must run the same checks, or green means nothing.
+
+    Before scripts/check.sh, the workflow listed its own commands. The
+    local instructions and the workflow disagreed about which samples were
+    linted, and neither side could tell.
+    """
+
+    def test_the_gate_script_exists(self):
+        self.assertTrue((ROOT / GATE).is_file(), "%s is missing" % GATE)
+
+    def test_the_workflow_delegates_to_the_gate(self):
+        path = ROOT / CI_WORKFLOW
+        self.assertTrue(path.is_file(), "%s is missing" % CI_WORKFLOW)
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("scripts/check.sh tests", text)
+        self.assertIn("scripts/check.sh lint", text)
+        self.assertNotIn("unittest discover", text,
+                         "%s runs the tests directly instead of through %s"
+                         % (CI_WORKFLOW, GATE))
+
+    def test_the_push_hook_runs_the_gate(self):
+        """Actions is disabled for this account, so this hook is the gate."""
+        path = ROOT / "hooks/pre-push"
+        self.assertTrue(path.is_file(), "hooks/pre-push is missing")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("check.sh", text)
 
 
 if __name__ == "__main__":
