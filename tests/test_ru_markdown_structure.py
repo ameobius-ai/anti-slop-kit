@@ -1,8 +1,23 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Tests for the Russian linter analyzer. Standard library only."""
+import importlib.util
+import pathlib
 import unittest
-import sys
-sys.path.insert(0, '../ru')
 
-from ru_ste_lint import MarkdownStructureAnalyzer, check_markdown_structure
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def load(relpath, name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relpath)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_mod = load("ru/ru-ste-lint.py", "ru_ste_lint")
+MarkdownStructureAnalyzer = _mod.MarkdownStructureAnalyzer
+check_markdown_structure = _mod.check_markdown_structure
 
 
 class TestRuMarkdownStructure(unittest.TestCase):
@@ -12,45 +27,53 @@ class TestRuMarkdownStructure(unittest.TestCase):
     
     def test_heading_hierarchy_skip(self):
         lines = ['# Заголовок', 'Текст.', '### Подраздел', 'Ещё.']
-        violations = self.analyzer.check_heading_hierarchy(lines)
+        self.analyzer.check_heading_hierarchy(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0]['rule'], 'md_heading_skip')
     
     def test_heading_hierarchy_correct(self):
         lines = ['# Заголовок', '## Раздел', '### Подраздел', '## Другой']
-        violations = self.analyzer.check_heading_hierarchy(lines)
+        self.analyzer.check_heading_hierarchy(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 0)
     
     def test_section_too_long(self):
         lines = ['# Раздел'] + ['Текст.'] * 35
-        violations = self.analyzer.check_section_lengths(lines)
+        self.analyzer.check_section_lengths(lines)
+        violations = self.analyzer.violations
         self.assertTrue(any(v['rule'] == 'md_section_too_long' for v in violations))
     
     def test_section_too_short(self):
         lines = ['# Раздел', 'Одна строка.', '# Следующий', 'Больше.']
-        violations = self.analyzer.check_section_lengths(lines)
+        self.analyzer.check_section_lengths(lines)
+        violations = self.analyzer.violations
         self.assertTrue(any(v['rule'] == 'md_section_too_short' for v in violations))
     
     def test_code_block_without_language(self):
         lines = ['Текст.', '`' + '`' + '`', 'код', '`' + '`' + '`']
-        violations = self.analyzer.check_code_blocks(lines)
+        self.analyzer.check_code_blocks(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0]['rule'], 'md_code_no_lang')
     
     def test_code_block_with_language(self):
         lines = ['`' + '`' + '`python', 'def hello():', '    pass', '`' + '`' + '`']
-        violations = self.analyzer.check_code_blocks(lines)
+        self.analyzer.check_code_blocks(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 0)
     
     def test_list_abuse(self):
         lines = ['- Элемент ' + str(i) for i in range(8)]
-        violations = self.analyzer.check_list_abuse(lines)
+        self.analyzer.check_list_abuse(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0]['rule'], 'md_list_abuse')
     
     def test_normal_list(self):
         lines = ['- Элемент 1', '- Элемент 2', '- Элемент 3']
-        violations = self.analyzer.check_list_abuse(lines)
+        self.analyzer.check_list_abuse(lines)
+        violations = self.analyzer.violations
         self.assertEqual(len(violations), 0)
     
     def test_integration(self):
