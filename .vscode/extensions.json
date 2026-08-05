@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.black-formatter",
+    "ms-python.mypy-type-checker",
+    "charliermarsh.ruff",
+    "davidanson.vscode-markdownlint",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}
