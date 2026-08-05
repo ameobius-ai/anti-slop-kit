@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Score evaluation results for round-trip transmission fidelity.
+"""Score eval tasks for fact preservation and task-type aggregates.
 
-This script scores how well rewrites preserve the original content's
-meaning and structure across different evaluation conditions.
+Proof sources:
+- User-provided previous session artifact: task directories contain source.md,
+  rewritten.md, metadata.json; metadata fields task_type/population are required.
+- Local Python stdlib behavior: json, pathlib, re, argparse.
+
+Environment-dependent values:
+- DEFAULT_TASKS_DIR assumes repo layout evals/tasks/<task-id>/.
+- MAX_FILE_BYTES is a corruption guard; tune if fixtures grow.
 """
 
 from __future__ import annotations
@@ -12,255 +18,421 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+DEFAULT_TASKS_DIR = Path("evals/tasks")
 
-@dataclass
-class FidelityResult:
-    """Result of fidelity scoring for a single task."""
-    
-    task_id: str
-    condition: str
-    score: float
-    facts_preserved: int
-    facts_total: int
-    details: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "task_id": self.task_id,
-            "condition": self.condition,
-            "score": self.score,
-            "facts_preserved": self.facts_preserved,
-            "facts_total": self.facts_total,
-            "details": self.details,
-        }
+# Bound external input. A corrupted or oversized fixture must cost a rejected
+# operation, not a hang or memory blowup.
+MAX_TASKS = 10_000
+MAX_FILE_BYTES = 5 * 1024 * 1024
+
+# Keep JSON output bounded. Full missing-fact debugging can be done by lowering
+# this locally; do not emit unbounded lists into CI artifacts.
+MISSING_FACT_REPORT_LIMIT = 200
+
+# Fact patterns are intentionally lexical, not semantic. This scorer measures
+# whether machine-checkable atoms survived the rewrite: endpoints, timestamps,
+# paths, header names, HTTP error classes, and numeric constraints.
+_METHOD_PATH = r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/[A-Za-z0-9_\-./{}%]+"
+# The UTC suffix needs a real space before it and must end the token:
+# a loose \s* lets IGNORECASE chew into the following word ("u c").
+_TIMESTAMP = r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?(?:[ \t]+UTC(?=\s|$))?"
+_PATH = r"/[A-Za-z0-9_\-./{}%]+"
+_HEADER = r"\b[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b"
+_ERROR_CLASS = r"\b[1-5]xx\b"
+# A number ends either by consuming a percent sign or at a word boundary.
+# A bare \b after an optional % fails on "5%" (no boundary between % and
+# space) and silently drops the percent semantics.
+_NUMBER = r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:%|\b)|\b\d+(?:%|\b)"
+
+_TOKEN_RE = re.compile(
+    rf"(?P<endpoint>{_METHOD_PATH})"
+    rf"|(?P<timestamp>{_TIMESTAMP})"
+    rf"|(?P<path>{_PATH})"
+    rf"|(?P<header>{_HEADER})"
+    rf"|(?P<errorclass>{_ERROR_CLASS})"
+    rf"|(?P<number>{_NUMBER})",
+    re.IGNORECASE,
+)
 
 
-def extract_facts(text: str) -> List[str]:
-    """Extract factual claims from text.
-    
-    Args:
-        text: Input text to analyze
-        
-    Returns:
-        List of extracted facts
-    """
-    facts: List[str] = []
-    
-    # Extract numbers and percentages
-    number_pattern = r'\b\d+(?:\.\d+)?%?\b'
-    facts.extend(re.findall(number_pattern, text))
-    
-    # Extract URLs
-    url_pattern = r'https?://[^\s]+'
-    facts.extend(re.findall(url_pattern, text))
-    
-    # Extract identifiers (camelCase, snake_case)
-    id_pattern = r'\b[a-z][a-zA-Z0-9_]+\b'
-    facts.extend(re.findall(id_pattern, text))
-    
-    # Extract quoted strings
-    quote_pattern = r'["\']([^"\']+)["\']'
-    facts.extend(re.findall(quote_pattern, text))
-    
+def _canonical_number(raw: str) -> str:
+    value = raw.strip().lower()
+
+    # Preserve percent semantics; 1% and 1 are different constraints.
+    percent = "%" if value.endswith("%") else ""
+    if percent:
+        value = value[:-1]
+
+    # Treat 1,247 and 1247 as the same fact.
+    value = value.replace(",", "")
+    return f"{value}{percent}"
+
+
+def _canonical_timestamp(raw: str) -> str:
+    value = raw.strip().lower()
+
+    # Strip the UTC suffix before normalizing the T separator, otherwise
+    # replace("t", " ") turns "utc" into "u c" and the check below never
+    # fires. "2024-11-15 02:00 UTC" and "2024-11-15 02:00" compare equal.
+    if value.endswith(" utc"):
+        value = value[:-4]
+
+    value = value.replace("t", " ")
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _canonical_token(kind: str, raw: str) -> str:
+    value = raw.strip()
+
+    if kind == "number":
+        value = _canonical_number(value)
+    elif kind == "timestamp":
+        value = _canonical_timestamp(value)
+    else:
+        value = value.lower()
+        value = re.sub(r"\s+", " ", value).strip()
+        value = value.rstrip(".,;:")
+
+    return f"{kind}:{value}"
+
+
+def extract_facts(text: str):
+    facts = set()
+
+    for match in _TOKEN_RE.finditer(text):
+        kind = match.lastgroup or "token"
+        raw = match.group(0)
+        if not raw:
+            continue
+        facts.add(_canonical_token(kind, raw))
+
     return facts
 
 
-def calculate_fidelity(
-    original: str,
-    rewrite: str,
-    task_id: str,
-    condition: str
-) -> FidelityResult:
-    """Calculate fidelity score between original and rewrite.
-    
-    Args:
-        original: Original text
-        rewrite: Rewritten text
-        task_id: Task identifier
-        condition: Evaluation condition name
-        
-    Returns:
-        FidelityResult with score and details
-    """
-    original_facts = extract_facts(original)
-    rewrite_facts = extract_facts(rewrite)
-    
-    if not original_facts:
-        return FidelityResult(
-            task_id=task_id,
-            condition=condition,
-            score=1.0,
-            facts_preserved=0,
-            facts_total=0,
-            details={"note": "No facts in original"}
+def read_text_guarded(path: Path) -> Tuple[Optional[str], Optional[str]]:
+    try:
+        if not path.exists():
+            return None, f"missing_file:{path.name}"
+
+        size = path.stat().st_size
+        if size > MAX_FILE_BYTES:
+            return None, f"file_too_large:{path.name}"
+
+        return path.read_text(encoding="utf-8"), None
+    except OSError as exc:
+        return None, f"os_error:{exc.__class__.__name__}"
+    except UnicodeDecodeError:
+        return None, "utf8_decode_error"
+
+
+def load_metadata(path: Path) -> Tuple[Dict[str, Any], Optional[str]]:
+    text, error = read_text_guarded(path)
+    if error is not None:
+        return {}, error
+
+    try:
+        data = json.loads(text or "")
+    except json.JSONDecodeError as exc:
+        return {}, f"metadata_json_error:{exc.msg}"
+
+    if not isinstance(data, dict):
+        return {}, "metadata_not_object"
+
+    return data, None
+
+
+@dataclass
+class TaskResult:
+    task_id: str
+    task_type: str = "unknown"
+    population: str = "unknown"
+    fidelity_score: float = 0.0
+    source_fact_count: int = 0
+    matched_fact_count: int = 0
+    missing_fact_count: int = 0
+    missing_facts: List[str] = field(default_factory=list)
+    error: Optional[str] = None
+    metadata_error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "task_type": self.task_type,
+            "population": self.population,
+            "fidelity_score": self.fidelity_score,
+            "source_fact_count": self.source_fact_count,
+            "matched_fact_count": self.matched_fact_count,
+            "missing_fact_count": self.missing_fact_count,
+            "missing_facts": self.missing_facts,
+            "error": self.error,
+            "metadata_error": self.metadata_error,
+        }
+
+
+def score_task(task_dir: Path) -> Dict[str, Any]:
+    result = TaskResult(task_id=task_dir.name)
+
+    if not task_dir.is_dir():
+        result.error = "not_a_directory"
+        return result.to_dict()
+
+    metadata, metadata_error = load_metadata(task_dir / "metadata.json")
+
+    if metadata:
+        result.task_type = str(metadata.get("task_type", "unknown"))
+        result.population = str(metadata.get("population", "unknown"))
+
+    # Older tasks may lack metadata.json; that is unknown, not fatal.
+    # Corrupt metadata is surfaced separately.
+    if metadata_error is not None and not metadata_error.startswith("missing_file:"):
+        result.metadata_error = metadata_error
+
+    source_text, source_error = read_text_guarded(task_dir / "source.md")
+    rewritten_text, rewritten_error = read_text_guarded(task_dir / "rewritten.md")
+
+    if source_error is not None or rewritten_error is not None:
+        result.error = source_error if source_error is not None else rewritten_error
+        return result.to_dict()
+
+    source_facts = extract_facts(source_text or "")
+    rewritten_facts = extract_facts(rewritten_text or "")
+
+    if not source_facts:
+        result.error = "no_source_facts_extracted"
+        return result.to_dict()
+
+    matched = source_facts.intersection(rewritten_facts)
+    missing = sorted(source_facts - matched)
+
+    result.source_fact_count = len(source_facts)
+    result.matched_fact_count = len(matched)
+    result.missing_fact_count = len(missing)
+    result.missing_facts = missing[:MISSING_FACT_REPORT_LIMIT]
+    result.fidelity_score = round(result.matched_fact_count / result.source_fact_count, 4)
+
+    return result.to_dict()
+
+
+def _aggregate(results: List[Dict[str, Any]], key: str) -> Dict[str, Any]:
+    groups: Dict[str, List[float]] = {}
+
+    for row in results:
+        group_key = str(row.get(key, "unknown") or "unknown")
+        groups.setdefault(group_key, []).append(float(row.get("fidelity_score", 0.0)))
+
+    aggregated = {}
+    for group_key in sorted(groups):
+        scores = groups[group_key]
+        aggregated[group_key] = {
+            "aggregate_fidelity": round(sum(scores) / len(scores), 4),
+            "task_count": len(scores),
+        }
+
+    return aggregated
+
+
+def score_all(tasks_dir: Path, task_filter: Optional[str] = None) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "tasks_dir": str(tasks_dir),
+        "truncated": False,
+        "task_count": 0,
+        "aggregate_fidelity": 0.0,
+        "by_task_type": {},
+        "by_population": {},
+        "results": [],
+    }
+
+    if not tasks_dir.exists() or not tasks_dir.is_dir():
+        summary["error"] = f"tasks_dir_missing:{tasks_dir}"
+        return summary
+
+    task_dirs = []
+    truncated = False
+
+    for path in sorted(tasks_dir.iterdir()):
+        if not path.is_dir():
+            continue
+
+        if task_filter is not None and path.name != task_filter:
+            continue
+
+        task_dirs.append(path)
+
+        if len(task_dirs) >= MAX_TASKS:
+            truncated = True
+            break
+
+    results = [score_task(path) for path in task_dirs]
+
+    aggregate_fidelity = 0.0
+    if results:
+        aggregate_fidelity = round(
+            sum(row["fidelity_score"] for row in results) / len(results),
+            4,
         )
-    
-    # Count preserved facts
-    original_set = set(original_facts)
-    rewrite_set = set(rewrite_facts)
-    
-    preserved = original_set.intersection(rewrite_set)
-    facts_preserved = len(preserved)
-    facts_total = len(original_set)
-    
-    score = facts_preserved / facts_total if facts_total > 0 else 1.0
-    
-    return FidelityResult(
-        task_id=task_id,
-        condition=condition,
-        score=score,
-        facts_preserved=facts_preserved,
-        facts_total=facts_total,
-        details={
-            "original_facts": original_facts,
-            "rewrite_facts": rewrite_facts,
-            "preserved": list(preserved)
+
+    summary.update(
+        {
+            "truncated": truncated,
+            "task_count": len(results),
+            "aggregate_fidelity": aggregate_fidelity,
+            "by_task_type": _aggregate(results, "task_type"),
+            "by_population": _aggregate(results, "population"),
+            "results": results,
         }
     )
 
-
-def score_task(task_dir: Path, condition: str) -> FidelityResult:
-    """Score a single task directory.
-    
-    Args:
-        task_dir: Path to task directory
-        condition: Evaluation condition name
-        
-    Returns:
-        FidelityResult for the task
-    """
-    task_id = task_dir.name
-    
-    original_path = task_dir / "original.md"
-    rewrite_path = task_dir / f"rewrite_{condition}.md"
-    
-    if not original_path.exists():
-        return FidelityResult(
-            task_id=task_id,
-            condition=condition,
-            score=0.0,
-            facts_preserved=0,
-            facts_total=0,
-            details={"error": "original.md not found"}
-        )
-    
-    if not rewrite_path.exists():
-        return FidelityResult(
-            task_id=task_id,
-            condition=condition,
-            score=0.0,
-            facts_preserved=0,
-            facts_total=0,
-            details={"error": f"rewrite_{condition}.md not found"}
-        )
-    
-    original_text = original_path.read_text(encoding='utf-8')
-    rewrite_text = rewrite_path.read_text(encoding='utf-8')
-    
-    return calculate_fidelity(original_text, rewrite_text, task_id, condition)
-
-
-def score_all_tasks(
-    tasks_dir: Path,
-    condition: str
-) -> List[FidelityResult]:
-    """Score all tasks in a directory.
-    
-    Args:
-        tasks_dir: Path to tasks directory
-        condition: Evaluation condition name
-        
-    Returns:
-        List of FidelityResult for all tasks
-    """
-    results: List[FidelityResult] = []
-    
-    for task_dir in sorted(tasks_dir.iterdir()):
-        if task_dir.is_dir() and not task_dir.name.startswith('.'):
-            result = score_task(task_dir, condition)
-            results.append(result)
-    
-    return results
-
-
-def aggregate_scores(results: List[FidelityResult]) -> Dict[str, Any]:
-    """Aggregate scores across all results.
-    
-    Args:
-        results: List of FidelityResult
-        
-    Returns:
-        Dictionary with aggregate statistics
-    """
     if not results:
-        return {"mean": 0.0, "min": 0.0, "max": 0.0, "count": 0}
-    
-    scores = [r.score for r in results]
-    
-    return {
-        "mean": sum(scores) / len(scores),
-        "min": min(scores),
-        "max": max(scores),
-        "count": len(scores),
-    }
+        summary["error"] = "no_tasks_found"
+
+    return summary
+
+
+def _md_escape(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def render_markdown(summary: Dict[str, Any]) -> str:
+    lines = [
+        "# Eval results",
+        "",
+        f"Generated: {summary.get('generated_at', 'unknown')}",
+        f"Tasks dir: {summary.get('tasks_dir', 'unknown')}",
+    ]
+
+    if summary.get("error"):
+        lines.append(f"Error: {summary['error']}")
+
+    lines.append(
+        "Aggregate fidelity: "
+        f"{summary.get('aggregate_fidelity', 0.0)} "
+        f"across {summary.get('task_count', 0)} tasks"
+    )
+
+    lines.extend(
+        [
+            "",
+            "## By task type",
+            "",
+            "| task_type | aggregate_fidelity | task_count |",
+            "|---|---:|---:|",
+        ]
+    )
+
+    for key, value in (summary.get("by_task_type") or {}).items():
+        lines.append(
+            f"| {_md_escape(key)} "
+            f"| {value['aggregate_fidelity']} "
+            f"| {value['task_count']} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## By population",
+            "",
+            "| population | aggregate_fidelity | task_count |",
+            "|---|---:|---:|",
+        ]
+    )
+
+    for key, value in (summary.get("by_population") or {}).items():
+        lines.append(
+            f"| {_md_escape(key)} "
+            f"| {value['aggregate_fidelity']} "
+            f"| {value['task_count']} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Tasks",
+            "",
+            "| task | type | population | fidelity | missing | error |",
+            "|---|---|---|---:|---:|---|",
+        ]
+    )
+
+    for row in summary.get("results", []):
+        error = row.get("error") or row.get("metadata_error") or ""
+        lines.append(
+            f"| {_md_escape(row['task_id'])} "
+            f"| {_md_escape(row['task_type'])} "
+            f"| {_md_escape(row['population'])} "
+            f"| {row['fidelity_score']} "
+            f"| {row['missing_fact_count']} "
+            f"| {_md_escape(error)} |"
+        )
+
+    return "\n".join(lines) + "\n"
+
+
+def _write_output(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    """Main entry point.
-    
-    Args:
-        argv: Command line arguments
-        
-    Returns:
-        Exit code (0 for success)
-    """
     parser = argparse.ArgumentParser(
-        description="Score round-trip transmission fidelity"
+        description="Score anti-slop eval tasks for fact preservation."
     )
     parser.add_argument(
-        "tasks_dir",
+        "--tasks-dir",
         type=Path,
-        help="Directory containing task subdirectories"
+        default=DEFAULT_TASKS_DIR,
+        help="Path to evals/tasks directory.",
     )
     parser.add_argument(
-        "--condition",
-        type=str,
-        default="baseline",
-        help="Evaluation condition to score (default: baseline)"
+        "--task",
+        help="Score only one task directory name, e.g. en-16.",
     )
     parser.add_argument(
-        "--output",
+        "--json-out",
         type=Path,
-        help="Output JSON file (default: stdout)"
+        help="Write full JSON summary to this path.",
     )
-    
+    parser.add_argument(
+        "--markdown-out",
+        type=Path,
+        help="Write Markdown summary to this path.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit 1 if any task has an error or metadata error.",
+    )
+
     args = parser.parse_args(argv)
-    
-    if not args.tasks_dir.exists():
-        print(f"Error: {args.tasks_dir} does not exist", file=sys.stderr)
+
+    summary = score_all(args.tasks_dir, args.task)
+
+    if args.json_out is not None:
+        _write_output(
+            args.json_out,
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        )
+
+    if args.markdown_out is not None:
+        _write_output(args.markdown_out, render_markdown(summary))
+
+    if args.json_out is None and args.markdown_out is None:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    error = str(summary.get("error", ""))
+    if error.startswith("tasks_dir_missing") or summary.get("task_count", 0) == 0:
+        return 2
+
+    if args.strict and any(
+        row.get("error") or row.get("metadata_error")
+        for row in summary.get("results", [])
+    ):
         return 1
-    
-    results = score_all_tasks(args.tasks_dir, args.condition)
-    aggregate = aggregate_scores(results)
-    
-    output_data = {
-        "condition": args.condition,
-        "results": [r.to_dict() for r in results],
-        "aggregate": aggregate,
-    }
-    
-    output_json = json.dumps(output_data, indent=2)
-    
-    if args.output:
-        args.output.write_text(output_json, encoding='utf-8')
-        print(f"Results written to {args.output}")
-    else:
-        print(output_json)
-    
+
     return 0
 
 
