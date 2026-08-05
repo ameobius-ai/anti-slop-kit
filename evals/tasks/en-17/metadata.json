@@ -1,0 +1,6 @@
+{
+  "task_type": "robot_rewrite_human_review",
+  "source_task": "en-12",
+  "population": "human_review",
+  "description": "Robot rewrites migration plan. Human reviews for legibility and fact preservation."
+}

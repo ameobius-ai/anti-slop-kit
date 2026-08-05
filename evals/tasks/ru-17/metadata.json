@@ -1,0 +1,6 @@
+{
+  "task_type": "robot_rewrite_human_review",
+  "source_task": "ru-12",
+  "population": "human_review",
+  "description": "Робот переписывает план миграции. Человек проверяет на читаемость и сохранение фактов."
+}
