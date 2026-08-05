@@ -37,11 +37,16 @@ MISSING_FACT_REPORT_LIMIT = 200
 # whether machine-checkable atoms survived the rewrite: endpoints, timestamps,
 # paths, header names, HTTP error classes, and numeric constraints.
 _METHOD_PATH = r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/[A-Za-z0-9_\-./{}%]+"
-_TIMESTAMP = r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?(?:\s*UTC)?"
+# The UTC suffix needs a real space before it and must end the token:
+# a loose \s* lets IGNORECASE chew into the following word ("u c").
+_TIMESTAMP = r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?(?:[ \t]+UTC(?=\s|$))?"
 _PATH = r"/[A-Za-z0-9_\-./{}%]+"
 _HEADER = r"\b[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b"
 _ERROR_CLASS = r"\b[1-5]xx\b"
-_NUMBER = r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?%?\b|\b\d+%?\b"
+# A number ends either by consuming a percent sign or at a word boundary.
+# A bare \b after an optional % fails on "5%" (no boundary between % and
+# space) and silently drops the percent semantics.
+_NUMBER = r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:%|\b)|\b\d+(?:%|\b)"
 
 _TOKEN_RE = re.compile(
     rf"(?P<endpoint>{_METHOD_PATH})"
@@ -68,12 +73,15 @@ def _canonical_number(raw: str) -> str:
 
 
 def _canonical_timestamp(raw: str) -> str:
-    value = raw.strip().lower().replace("t", " ")
+    value = raw.strip().lower()
 
-    # "2024-11-15 02:00 UTC" and "2024-11-15 02:00" should compare equal.
+    # Strip the UTC suffix before normalizing the T separator, otherwise
+    # replace("t", " ") turns "utc" into "u c" and the check below never
+    # fires. "2024-11-15 02:00 UTC" and "2024-11-15 02:00" compare equal.
     if value.endswith(" utc"):
         value = value[:-4]
 
+    value = value.replace("t", " ")
     return re.sub(r"\s+", " ", value).strip()
 
 
