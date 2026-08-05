@@ -1,12 +1,22 @@
+import importlib.util
 import json
-import sys
+import pathlib
 import unittest
-from io import StringIO
 
-# Add parent directory to path
-sys.path.insert(0, '.')
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-from en.ste_lint import format_sarif, diagnostics, select
+
+def load(relpath, name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relpath)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+en = load("en/ste-lint.py", "ste_lint")
+format_sarif = en.format_sarif
+lint = en.lint
+
 
 class TestSARIFOutput(unittest.TestCase):
     """Test SARIF 2.1.0 output format."""
@@ -25,7 +35,6 @@ fast-paced world.
 
     def test_sarif_is_valid_json(self):
         """SARIF output must be valid JSON."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
         sarif = format_sarif(self.filename, r, self.sample_text, None)
 
@@ -42,7 +51,6 @@ fast-paced world.
 
     def test_sarif_has_required_fields(self):
         """SARIF must have version, schema, and runs."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
         sarif = format_sarif(self.filename, r, self.sample_text, None)
 
@@ -62,7 +70,6 @@ fast-paced world.
 
     def test_sarif_has_tool_driver(self):
         """SARIF must have tool driver with rules."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
         sarif = format_sarif(self.filename, r, self.sample_text, None)
 
@@ -89,7 +96,6 @@ fast-paced world.
 
     def test_sarif_rules_have_required_fields(self):
         """Each rule must have id, name, and shortDescription."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
         sarif = format_sarif(self.filename, r, self.sample_text, None)
 
@@ -104,7 +110,6 @@ fast-paced world.
 
     def test_sarif_results_have_required_fields(self):
         """Each result must have ruleId, level, message, and locations."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
         sarif = format_sarif(self.filename, r, self.sample_text, None)
 
@@ -141,7 +146,6 @@ fast-paced world.
 
     def test_sarif_respects_only_flag(self):
         """SARIF must respect --only flag for filtering."""
-        from en.ste_lint import lint
         r = lint(self.sample_text)
 
         # Test with only="slop"
@@ -155,9 +159,8 @@ fast-paced world.
 
     def test_sarif_empty_for_clean_text(self):
         """SARIF should have empty results for clean text."""
-        clean_text = "# Clean Document\n\nThis is a clean sentence with twenty words or fewer.\n"
+        clean_text = "# Notes\n\nThe proxy restarts after a config change.\n"
 
-        from en.ste_lint import lint
         r = lint(clean_text)
         sarif = format_sarif("clean.md", r, clean_text, None)
 
