@@ -1,13 +1,14 @@
-# Skill evaluation harness
+# Skill eval suite
 
 The scores in `RESULTS.md` come from two hand-written texts per language. That
-is a smoke test. This directory holds the harness for a real measurement.
+is a smoke test. This directory holds the tools to measure for real.
 
 **Status: first full run executed 2026-08-04** via a local OpenAI-compatible gateway
 (cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`).
-en 23/28 cells (1 timeout on `en-05__banlist`), ru 24/28. The 07-task cells are
-not generated yet; the means below come from the six-task grid. Mean per
-condition (lower is cleaner):
+
+en covered 23 of 28 cells with one timeout on `en-05__banlist`. ru covered 24 of
+28. The tools have not generated the 07-task cells yet. The means below come
+from the six-task grid. Mean per variant (lower is cleaner):
 
 | lang | bare | plain | banlist | skill |
 |---|---|---|---|---|
@@ -16,27 +17,26 @@ condition (lower is cleaner):
 
 > The ru row is **pre-fix** (linter before PR #34). After the technical-register
 > allowlist (issue #33), re-scoring the same outputs gives ru: bare 10.73, plain 6.80,
-> banlist 3.63, skill **2.00** — RU skill at parity with EN (2.00 vs 2.64).
+> banlist 3.63, skill **2.00**. RU skill now sits at parity with EN (2.00 vs 2.64).
 
-Earlier scaffolding note: the authoring environment had no external network/API key;
-the harness itself is OpenAI-compatible, so any endpoint works.
+Scaffolding note: the author's setup had no external network or API key. The
+runner speaks OpenAI-compatible, so any endpoint works.
 
 ## Design
 
-Seven tasks per language, four conditions, one model per run.
+Seven tasks per language, four prompt variants, one model per run.
 
-The four conditions exist to separate three different claims that are easy to
-confuse:
+The four variants separate three claims that are easy to confuse:
 
-| Condition | Prompt addition | Answers the question |
+| Variant | Added to the prompt | Answers |
 | --- | --- | --- |
-| `bare` | none | What does the model do by default? |
-| `plain` | "Write clearly and concisely." | Does any instruction help? |
+| `bare` | nothing | What does the model do by default? |
+| `plain` | "Write clearly and concisely." | Does any rule help? |
 | `banlist` | a list of words to avoid | Is the skill better than a word list? |
 | `skill` | the full SKILL.md | Does the skill add anything on top? |
 
-Without `plain` and `banlist` a large delta proves nothing: it may only show
-that some instruction is better than none.
+Without `plain` and `banlist`, a large delta proves nothing. It then shows only
+that some prompt beats none.
 
 ## Run it
 
@@ -47,7 +47,8 @@ python3 evals/run.py --model MODEL_NAME --lang en --out evals/outputs
 python3 evals/score.py                            # scores evals/tasks fixtures
 ```
 
-Against a local OpenAI-compatible gateway (no external network/key — this stack ships one):
+Against a local OpenAI-compatible gateway (no external network or key needed.
+This stack ships a gateway):
 
 ```sh
 export ANTI_SLOP_API_KEY=proxypal-local
@@ -58,15 +59,15 @@ python3 evals/score.py                            # scores evals/tasks fixtures
 
 `run.py` writes one file per cell named `<task>__<condition>.md` under
 `--out`. `score.py` is a separate lane: it scores the committed
-`evals/tasks/<id>/` fixtures (source.md vs rewritten.md) for fact
-preservation and emits a JSON summary on stdout (`--json-out`,
-`--markdown-out`, `--strict` optional).
+`evals/tasks/<id>/` fixtures (source.md vs rewritten.md) for kept facts and
+prints a JSON summary to stdout (`--json-out`, `--markdown-out`, `--strict`
+optional).
 
 ## What a run leaves behind
 
-The scoring copies in `--out` are working files: they get re-scored, edited and
-overwritten. Every invocation also writes a record that is meant to stay
-untouched and to be committed:
+The scoring copies in `--out` are working files. The scorer re-scores, edits,
+and overwrites them. Every run also writes a record. Keep that record untouched
+and commit it:
 
 ```
 evals/runs/20260804T153000Z__en__deepseek-v4-flash-free/
@@ -76,40 +77,44 @@ evals/runs/20260804T153000Z__en__deepseek-v4-flash-free/
     outputs/<cell>.md     the answer as generated
 ```
 
-The record answers the questions a score cannot: which prompt produced this
-text, from which model, on which endpoint, and what the API actually returned.
-The prompt is stored whole and by digest, so two runs can be compared without
-diffing files. The API key is never written: only the scheme, host and path of
-the endpoint reach the manifest, and a key passed in a query string or in
-userinfo is stripped.
+The record answers what a score cannot say: which prompt produced this text,
+from which model, on which endpoint, and what the API returned. The manifest
+stores each prompt whole and by digest, so two runs compare by digest without a
+file diff. The runner never writes the API key. Only the scheme, host, and path
+of the endpoint reach the manifest. The runner strips a key from any query
+string or userinfo.
 
-Every cell appears in `manifest.json`, including the ones that produced no new
-text. A cell whose output file already exists is recorded as `skipped_existing`
-and a failed call is recorded as `failed` with its error, because a resumed run
-that writes nothing used to look exactly like a run that never happened. If a
-run generates nothing at all, `run.py` says so on stderr.
+The manifest lists every cell, including cells that produced no new text. It
+marks an existing output file as `skipped_existing` and a failed call as
+`failed` with its error. Before this record existed, a resumed run that wrote
+nothing looked like a run that never happened. If a run generates nothing at
+all, `run.py` says so on stderr.
 
-The first live run, on 2026-08-04, predates all of this. Only its scored copies
-were kept, and they are gone: the numbers above cannot be re-scored against a
-newer linter, and the before/after pairs in `examples/` had to be written by
-hand instead of taken from real `bare` output. That is the gap this record
-closes, and it is why the run scores here are reported with a date and a model
-rather than as a property of the kit.
+The first live run, on 2026-08-04, predates all of this. The team kept only its
+scored copies, and they are gone now. Nobody can re-score those numbers against
+a newer linter. The authors wrote the before/after pairs in `examples/` by hand
+instead of copying real `bare` output. This record closes that gap. It also
+explains why run scores here carry a date and a model instead of standing as a
+property of the kit.
 
 ## Read the output honestly
 
-- The linter measures register, not correctness. A condition can win on score
-  and lose on facts. Read a sample of the outputs.
-- Report the model name and date. A result from one model does not transfer;
-  the source experiment this kit builds on found the ban-list condition helped
-  one model and barely moved another.
-- Run each cell three times (`--repeat 3`). Single samples from a sampling
-  process are noise, and the repeats land as separate cells (`__r2`, `__r3`) so
-  the spread stays visible instead of being averaged away at write time.
-- Check task-level results, not only the mean. In the source experiment the
-  skill made one task of six worse.
+- The linter measures register, not correctness. A variant can win on score and
+  lose on facts. Read a sample of the outputs.
 
+- Report the model name and date. A result from one model does not transfer.
+  The source study behind this kit found the ban-list variant helped one model
+  and barely moved another.
+
+- Run each cell three times (`--repeat 3`). Single samples from a sampling
+  process are noise. The repeats land as separate cells (`__r2`, `__r3`), so
+  the spread stays visible at write time.
+
+- Check task-level results, not only the mean. In the source study the skill
+  made one task of six worse.
 
 ## Task en-07: System Prompt
 
-Added 2026-08-05. Tests prompt engineering quality for CI/CD code review agents. Measures specificity of role definition, evaluation criteria, and output format.
+Added 2026-08-05. Tests prompt quality for CI/CD code review agents. It scores
+how well the prompt defines the role, the review criteria, and the output
+format.
