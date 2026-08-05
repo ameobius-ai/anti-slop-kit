@@ -59,3 +59,6 @@ clean:
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name "*.pyd" -delete
 	@echo "Clean complete"
+
+security:
+	bandit -r tools/ evals/ harness/ -f txt
