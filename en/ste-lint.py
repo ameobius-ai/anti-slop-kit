@@ -414,6 +414,95 @@ def select(rows, only):
     return [row for row in rows if (row[1] in SLOP_CATEGORIES) == want_slop]
 
 
+
+def format_sarif(name, r, text, only):
+    """Format results as SARIF 2.1.0 for enterprise tool integration."""
+    # Define rules based on violation categories
+    rules = [
+        {
+            "id": "nominalization",
+            "name": "Nominalization",
+            "shortDescription": {"text": "Unnecessary nominalization (e.g., 'utilization' instead of 'use')"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "passive_voice",
+            "name": "Passive Voice",
+            "shortDescription": {"text": "Passive voice construction (e.g., 'is handled' instead of 'handles')"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "long_sentence",
+            "name": "Long Sentence",
+            "shortDescription": {"text": "Sentence exceeds 20 words"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "banned_word",
+            "name": "Banned Word",
+            "shortDescription": {"text": "Banned word from ASD-STE100 list"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "marketing_adjective",
+            "name": "Marketing Adjective",
+            "shortDescription": {"text": "Marketing language that adds no technical value"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "ai_slop",
+            "name": "AI Slop",
+            "shortDescription": {"text": "Common AI-generated filler phrases"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        },
+        {
+            "id": "modal_hedge",
+            "name": "Modal Hedge",
+            "shortDescription": {"text": "Hedging language that weakens statements"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/en/SKILL.md"
+        }
+    ]
+    
+    # Build results from findings
+    results = []
+    if text is not None:
+        for line_num, cat, match, sug in select(diagnostics(text), only):
+            # Map category to rule index
+            rule_id = cat.replace("(>20w)", "").replace("(>6s)", "").replace("_verb", "").replace("_voice", "")
+            rule_index = next((i for i, r in enumerate(rules) if rule_id in r["id"]), 0)
+            
+            results.append({
+                "ruleId": rules[rule_index]["id"],
+                "ruleIndex": rule_index,
+                "level": "warning",
+                "message": {"text": f"{match} → {sug}"},
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": name},
+                        "region": {"startLine": line_num}
+                    }
+                }]
+            })
+    
+    sarif = {
+        "version": "2.1.0",
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "anti-slop-kit",
+                    "version": "1.0.0",
+                    "informationUri": "https://github.com/ameobius-ai/anti-slop-kit",
+                    "rules": rules
+                }
+            },
+            "results": results
+        }]
+    }
+    
+    return sarif
+
+
 def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
            breakdown=False, only=None):
     count, metric, label = r["total"], r["total_per100w"], "per 100 words"
@@ -443,7 +532,10 @@ def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
         if only:
             line += f" only={only}"
         print(line)
-    if text is not None and fmt == "github" and not as_json:
+    if text is not None and fmt == "sarif":
+        sarif = format_sarif(name, r, text, only)
+        print(json.dumps(sarif, ensure_ascii=False, indent=2))
+    elif text is not None and fmt == "github" and not as_json:
         for line, cat, match, sug in select(diagnostics(text), only):
             print(f"::warning file={name},line={line},title={cat}::"
                   f"{_gh_escape(match)} -- {_gh_escape(sug)}")
@@ -491,7 +583,7 @@ def main(argv):
         elif a == "--format":
             i += 1
             if i >= len(argv) or argv[i] not in ("text", "github"):
-                print("ERROR: --format needs text or github", file=sys.stderr)
+                print("ERROR: --format needs text, github, or sarif", file=sys.stderr)
                 return 2
             fmt = argv[i]
         elif a.startswith("--format="):
