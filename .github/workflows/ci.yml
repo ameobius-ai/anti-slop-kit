@@ -34,3 +34,21 @@ jobs:
         env:
           ANTI_SLOP_FORMAT: github
         run: bash scripts/check.sh lint
+
+  security:
+    name: security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run bandit security scan
+        run: bandit -r tools/ evals/ harness/ hooks/ -f json -o bandit-report.json || true
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: bandit-report.json
