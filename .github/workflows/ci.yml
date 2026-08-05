@@ -20,7 +20,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Run the test half of the gate
-        run: bash scripts/check.sh tests
+        run: pytest tests/ --cov=tools --cov=evals --cov-report=xml --cov-report=html --cov-report=term-missing
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
 
   self-lint:
     name: the clean samples must stay clean
