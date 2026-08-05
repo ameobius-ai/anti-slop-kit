@@ -1,0 +1,6 @@
+{
+  "task_type": "human_rewrite",
+  "source_task": "ru-11",
+  "population": "human",
+  "description": "Человек переписывает API контракт для junior-разработчиков. Робот парсит результат."
+}
