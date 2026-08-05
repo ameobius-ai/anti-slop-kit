@@ -501,7 +501,18 @@ def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
     elif only == "cl":
         count, metric, label = r["cl"], r["cl_per100w"], "cl per 100 words"
     if as_json:
-        print(json.dumps({name: r}, ensure_ascii=False, indent=2))
+        output = {name: r}
+        if text is not None:
+            findings = []
+            for line_num, cat, match, sug in select(diagnostics(text), only):
+                findings.append({
+                    "line": line_num,
+                    "rule": cat,
+                    "match": match,
+                    "suggestion": sug
+                })
+            output[name]["findings"] = findings
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         line = (f"{os.path.basename(name):28} words={r['words']:5d} "
                 f"total={count:4d} per100w={metric:6.2f} "
