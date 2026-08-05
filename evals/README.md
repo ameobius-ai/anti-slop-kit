@@ -6,8 +6,8 @@ is a smoke test. This directory holds the tools to measure for real.
 **Status: first full run executed 2026-08-04** via a local OpenAI-compatible gateway
 (cliproxy at `127.0.0.1:8317`, key `proxypal-local`, model `deepseek-v4-flash-free`).
 
-en covered 23 of 28 cells with one timeout on `en-05__banlist`. ru covered 24 of
-28. The tools have not generated the 07-task cells yet. The means below come
+en covered 23/28 cells with one timeout on `en-05__banlist`. ru covered 24/28.
+The tools have not generated the 07-task cells yet. The means below come
 from the six-task grid. Mean per variant (lower is cleaner):
 
 | lang | bare | plain | banlist | skill |
