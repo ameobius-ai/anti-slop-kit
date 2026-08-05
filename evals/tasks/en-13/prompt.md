@@ -1,0 +1,1 @@
+Write a brief reference guide for new firmware engineers describing these UART registers.
