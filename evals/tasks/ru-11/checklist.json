@@ -1,0 +1,25 @@
+{
+  "endpoints": [
+    "POST /v1/charges",
+    "GET /v1/charges/{id}",
+    "POST /v1/refunds"
+  ],
+  "rate_limits": [
+    "100 \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432 \u0437\u0430 60 \u0441\u0435\u043a\u0443\u043d\u0434",
+    "500 \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432 \u0437\u0430 60 \u0441\u0435\u043a\u0443\u043d\u0434",
+    "50 \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432 \u0437\u0430 60 \u0441\u0435\u043a\u0443\u043d\u0434"
+  ],
+  "headers": [
+    "X-API-Key",
+    "Idempotency-Key",
+    "Content-Type: application/json"
+  ],
+  "status_codes": [
+    "201",
+    "400",
+    "402",
+    "429",
+    "200",
+    "404"
+  ]
+}
