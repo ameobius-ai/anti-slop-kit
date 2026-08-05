@@ -1,41 +1,18 @@
 {
-  "steps": [
-    "Step 1",
-    "Step 2",
-    "Step 3",
-    "Step 4",
-    "Step 5",
-    "Step 6",
-    "Step 7",
-    "Step 8"
-  ],
-  "durations": [
-    "5 minutes",
-    "45 minutes",
-    "180 minutes",
-    "10 minutes",
-    "30 minutes",
-    "1 minute",
-    "2 minutes",
-    "240 minutes",
-    "4 hours"
-  ],
   "dates": [
     "2024-11-15 02:00 UTC",
-    "2024-11-15 02:05 UTC",
-    "2024-11-15 02:50 UTC",
     "2024-11-15 05:50 UTC",
-    "2024-11-15 06:00 UTC",
-    "2024-11-15 06:30 UTC",
-    "2024-11-15 06:31 UTC",
     "2024-11-15 06:33 UTC"
   ],
-  "rollback_conditions": [
-    "within 60 seconds",
-    "takes 2 minutes",
-    "takes 50 minutes",
-    "within 2 hours",
-    "takes 3 minutes",
-    "error rate > 1% within first hour"
+  "durations": [
+    "5 минут",
+    "45 минут",
+    "180 минут",
+    "10 минут",
+    "30 минут",
+    "1 минута",
+    "2 минуты",
+    "240 минут",
+    "4 часа"
   ]
 }

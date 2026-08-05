@@ -1,32 +1,12 @@
 {
-  "incident_id": [
+  "id": [
     "INC-2024-447"
   ],
-  "timestamps": [
-    "2024-03-12 14:23:01 UTC",
-    "2024-03-12 14:23:15 UTC",
-    "2024-03-12 14:25:00 UTC",
-    "2024-03-12 14:32:44 UTC",
-    "2024-03-12 14:45:00 UTC",
-    "2024-03-12 14:47:00 UTC",
-    "2024-03-12 14:52:00 UTC",
-    "2024-03-12 14:58:00 UTC",
-    "2024-03-12 15:30:00 UTC",
-    "2024-03-12 16:00:00 UTC",
-    "2024-03-13 10:00:00 UTC",
-    "2024-03-13 14:00:00 UTC"
-  ],
   "counts": [
-    "3",
-    "847 requests/minute",
-    "12 requests/minute",
-    "4 instances",
-    "312 requests/minute",
-    "1,247 failed requests",
-    "312 affected users"
-  ],
-  "causal_links": [
-    "connection pool exhaustion",
-    "user-db replica"
+    "847",
+    "12",
+    "4",
+    "1,247",
+    "312"
   ]
 }

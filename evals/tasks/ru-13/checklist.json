@@ -1,5 +1,5 @@
 {
-  "base_address": [
+  "base": [
     "0x4000_C000"
   ],
   "offsets": [
@@ -8,32 +8,10 @@
     "0x0008",
     "0x000C"
   ],
-  "widths": [
-    "32 bits",
-    "8 bits",
-    "16 bits"
-  ],
-  "reset_values": [
+  "resets": [
     "0x0000_0000",
     "0x0000_0100",
     "0x00",
     "0x0001"
-  ],
-  "register_names": [
-    "CTRL",
-    "STATUS",
-    "DATA",
-    "BAUD"
-  ],
-  "field_names": [
-    "ENABLE",
-    "LOOPBACK",
-    "INT_ENABLE",
-    "TX_EMPTY",
-    "RX_FULL",
-    "ERROR",
-    "READY",
-    "DATA_BYTE",
-    "DIVISOR"
   ]
 }

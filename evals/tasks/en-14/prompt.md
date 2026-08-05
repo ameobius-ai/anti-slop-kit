@@ -1,1 +1,1 @@
-Draft a summary of this incident for the weekly executive report. Cover the impact and response.
+Draft a summary for the weekly executive report.

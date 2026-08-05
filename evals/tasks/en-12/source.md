@@ -28,7 +28,6 @@
 ## Step 6: 2024-11-15 06:30 UTC - Disable maintenance mode
 - Duration: 1 minute
 - Dependency: Step 5 completed
-- Rollback: none
 
 ## Step 7: 2024-11-15 06:31 UTC - Notify stakeholders
 - Duration: 2 minutes

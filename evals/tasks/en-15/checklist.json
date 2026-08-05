@@ -10,17 +10,5 @@
     "/api/v1/user/*",
     "/api/v1/admin/*",
     "/api/v1/internal/payments"
-  ],
-  "conditions": [
-    "rate_limit(100/minute)",
-    "token_valid()",
-    "token_scope(\"read:user\")",
-    "mfa_verified()",
-    "ip_whitelist(\"10.0.0.0/8\")",
-    "mtls_certificate(\"payment-gateway.cert\")"
-  ],
-  "actions": [
-    "ALLOW",
-    "DENY"
   ]
 }
