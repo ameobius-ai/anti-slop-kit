@@ -493,6 +493,95 @@ def select(rows, only):
     return [row for row in rows if (row[1] in SLOP_CATEGORIES) == want_slop]
 
 
+
+def format_sarif(name, r, text, only):
+    """Форматировать результаты как SARIF 2.1.0 для интеграции с enterprise инструментами."""
+    # Определить правила на основе категорий нарушений
+    rules = [
+        {
+            "id": "nominalization",
+            "name": "Номинализация",
+            "shortDescription": {"text": "Ненужная номинализация (например, 'реализация' вместо 'реализовать')"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "passive_voice",
+            "name": "Пассивный залог",
+            "shortDescription": {"text": "Конструкция пассивного залога (например, 'обрабатывается' вместо 'обрабатывает')"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "long_sentence",
+            "name": "Длинное предложение",
+            "shortDescription": {"text": "Предложение превышает 20 слов"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "clerical_phrase",
+            "name": "Канцеляризм",
+            "shortDescription": {"text": "Канцелярская фраза (например, 'в целях' вместо 'чтобы')"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "marketing_language",
+            "name": "Маркетинговый язык",
+            "shortDescription": {"text": "Маркетинговые слова, не несущие технической ценности"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "ai_slop",
+            "name": "AI slop",
+            "shortDescription": {"text": "Типичные фразы-наполнители, генерируемые ИИ"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        },
+        {
+            "id": "gerund",
+            "name": "Деепричастие",
+            "shortDescription": {"text": "Избыточное использование деепричастных оборотов"},
+            "helpUri": "https://github.com/ameobius-ai/anti-slop-kit/blob/main/ru/SKILL.md"
+        }
+    ]
+    
+    # Построить результаты из findings
+    results = []
+    if text is not None:
+        for line_num, cat, match, sug in select(diagnostics(text), only):
+            # Map category to rule index
+            rule_id = cat.replace("(>20w)", "").replace("(>6s)", "")
+            rule_index = next((i for i, r in enumerate(rules) if rule_id in r["id"]), 0)
+            
+            results.append({
+                "ruleId": rules[rule_index]["id"],
+                "ruleIndex": rule_index,
+                "level": "warning",
+                "message": {"text": f"{match} → {sug}"},
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": name},
+                        "region": {"startLine": line_num}
+                    }
+                }]
+            })
+    
+    sarif = {
+        "version": "2.1.0",
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "anti-slop-kit",
+                    "version": "1.0.0",
+                    "informationUri": "https://github.com/ameobius-ai/anti-slop-kit",
+                    "rules": rules
+                }
+            },
+            "results": results
+        }]
+    }
+    
+    return sarif
+
+
 def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
            breakdown=False, only=None):
     count, metric, label = r["total"], r["total_per100w"], "per 100 words"
@@ -522,7 +611,10 @@ def report(name, r, as_json, max_score, explain=False, fmt="text", text=None,
         if only:
             line += f" only={only}"
         print(line)
-    if text is not None and fmt == "github" and not as_json:
+    if text is not None and fmt == "sarif":
+        sarif = format_sarif(name, r, text, only)
+        print(json.dumps(sarif, ensure_ascii=False, indent=2))
+    elif text is not None and fmt == "github" and not as_json:
         for line, cat, match, sug in select(diagnostics(text), only):
             print(f"::warning file={name},line={line},title={cat}::"
                   f"{_gh_escape(match)} -- {_gh_escape(sug)}")
