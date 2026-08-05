@@ -1,0 +1,25 @@
+{
+  "endpoints": [
+    "POST /v1/charges",
+    "GET /v1/charges/{id}",
+    "POST /v1/refunds"
+  ],
+  "rate_limits": [
+    "100 requests per 60 seconds",
+    "500 requests per 60 seconds",
+    "50 requests per 60 seconds"
+  ],
+  "headers": [
+    "X-API-Key",
+    "Idempotency-Key",
+    "Content-Type: application/json"
+  ],
+  "status_codes": [
+    "201",
+    "400",
+    "402",
+    "429",
+    "200",
+    "404"
+  ]
+}
