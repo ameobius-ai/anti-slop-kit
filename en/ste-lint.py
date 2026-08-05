@@ -223,16 +223,59 @@ def _ing_main_count(text):
     return sum(1 for m in ING_MAIN_RE.finditer(text)
                if m.group(0).strip().lower() not in ING_STOP)
 
+# === TECHNICAL REGISTER ALLOWLIST (ported from RU linter, issue #12) ===
+
+TECHNICAL_STEMS = (
+    # storage / cache / eviction / deletion / usage
+    "cach", "evict", "delet", "remov", "usag", "stor",
+    # connect / process / compress / encrypt / auth / config
+    "connect", "process", "compress", "encrypt", "auth", "config",
+    "integrat", "rout", "initializ", "optimiz", "migrat", "synchroniz",
+    "deploy", "archiv", "buffer", "transaction", "serializ", "compil", "validat",
+    # lifecycle / transport / support
+    "launch", "start", "transfer", "support", "overlap",
+    # participles / short passives typical for docs
+    "deprecat", "allow", "expect", "built-in", "configur",
+    "document", "register", "sav", "load", "download", "updat", "instal",
+    "chang", "creat", "generat", "receiv", "send", "transform",
+    "test", "activat", "restart", "complet", "block", "unblock",
+    "authoriz", "describ", "defin", "specifi", "enabl", "disabl",
+    "limit", "sort", "filter", "extract", "apply", "invok", "return",
+    "provid", "requir", "execut",
+)
+
+
+def _fold(s):
+    return s.lower()
+
+
+def _tech(word):
+    w = _fold(word)
+    return any(w.startswith(stem) for stem in TECHNICAL_STEMS)
+
+
+def _morph_count(regex, text, stop=None):
+    n = 0
+    for m in regex.finditer(text):
+        word = m.group(0)
+        if stop is not None and word.lower().startswith(stop):
+            continue
+        if _tech(word):
+            continue
+        n += 1
+    return n
+
+
 # === PARTICIPLE HANDLING (ported from RU linter, issue #12) ===
 
 # -ing and -ed forms that often indicate passive voice or weak construction
 PARTICIPLE_RE = re.compile(
-    r"\b[a-z]{3,}(?:ing|ed|en)\b", re.I)
+    r"\b[a-z]{2,}(?:ing|ed|en)\b", re.I)
 
 # Lexicalized exceptions: common -ing/-ed words that are not violations
 PARTICIPLE_STOP = (
     "being", "during", "king", "ring", "sing", "spring", "string", "thing",
-    "working", "building", "reading", "leading", "hearing", "meaning",
+    "building", "reading", "leading", "hearing", "meaning",
     "used", "based", "cased", "named", "typed", "filed", "tiled",
 )
 
@@ -247,6 +290,17 @@ def _participle_count(text):
     """
     return _morph_count(PARTICIPLE_RE, text, PARTICIPLE_STOP)
 
+
+def _ing_progressive_count(text):
+    """Progressives after a be-verb ("is running"), minus technical terms.
+
+    Complements _ing_main_count (sentence-initial openers); kept separate so
+    the existing ing_main_verb diagnostics stay in sync with lint().
+    """
+    ing_after_be = re.compile(
+        r'\b(?:is|are|was|were|be|being)\s+([a-z]+ing)\b', re.I)
+    return sum(1 for m in ing_after_be.finditer(text)
+               if not _tech(m.group(1)))
 
 
 def lint(text):
@@ -549,64 +603,6 @@ def main(argv):
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 
-
-
-
-# === TECHNICAL REGISTER ALLOWLIST (ported from RU linter, issue #12) ===
-
-TECHNICAL_STEMS = (
-    # storage / cache / eviction / deletion / usage
-    "cach", "evict", "delet", "remov", "usag", "stor",
-    # connect / process / compress / encrypt / auth / config
-    "connect", "process", "compress", "encrypt", "auth", "config",
-    "integrat", "rout", "initializ", "optimiz", "migrat", "synchroniz",
-    "deploy", "archiv", "buffer", "transaction", "serializ", "compil", "validat",
-    # lifecycle / transport / support
-    "launch", "start", "stop", "transfer", "support", "overlap",
-    # participles / short passives typical for docs
-    "deprecat", "allow", "expect", "built-in", "configur",
-    "document", "register", "sav", "load", "download", "updat", "instal",
-    "ad", "chang", "creat", "generat", "receiv", "send", "transform",
-    "test", "activat", "restart", "complet", "block", "unblock",
-    "authoriz", "describ", "defin", "specifi", "enabl", "disabl",
-    "limit", "sort", "filter", "extract", "apply", "invok", "return",
-    "provid", "requir", "execut",
-)
-
-
-def _fold(s):
-    return s.lower()
-
-
-def _tech(word):
-    w = _fold(word)
-    return any(w.startswith(stem) for stem in TECHNICAL_STEMS)
-
-
-def _morph_count(regex, text, stop=None):
-    n = 0
-    for m in regex.finditer(text):
-        word = m.group(0)
-        if stop is not None and word.lower().startswith(stop):
-            continue
-        if _tech(word):
-            continue
-        n += 1
-    return n
-
-
-def _ing_main_count(text):
-    # Count -ing forms used as main verbs (not gerunds or adjectives).
-    # EN-specific rule: -ing forms as main verbs often indicate weak construction.
-    # Excludes technical terms from the allowlist.
-    ing_after_be = re.compile(
-        r'\b(?:is|are|was|were|be|being)\s+([a-z]+ing)\b', re.I)
-    count = 0
-    for m in ing_after_be.finditer(text):
-        word = m.group(1)
-        if not _tech(word):
-            count += 1
-    return count
 
 # === MARKDOWN STRUCTURE ANALYSIS ===
 
