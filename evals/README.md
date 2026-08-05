@@ -44,7 +44,7 @@ that some instruction is better than none.
 export ANTI_SLOP_API_KEY=...
 export ANTI_SLOP_API_BASE=https://api.example.com/v1   # OpenAI-compatible
 python3 evals/run.py --model MODEL_NAME --lang en --out evals/outputs
-python3 evals/score.py evals/outputs
+python3 evals/score.py                            # scores evals/tasks fixtures
 ```
 
 Against a local OpenAI-compatible gateway (no external network/key — this stack ships one):
@@ -53,12 +53,14 @@ Against a local OpenAI-compatible gateway (no external network/key — this stac
 export ANTI_SLOP_API_KEY=proxypal-local
 export ANTI_SLOP_API_BASE=http://127.0.0.1:8317/v1   # cliproxy
 python3 evals/run.py --model deepseek-v4-flash-free --lang en --out evals/outputs-en
-python3 evals/score.py evals/outputs-en
+python3 evals/score.py                            # scores evals/tasks fixtures
 ```
 
-`run.py` writes one file per cell named `<task>__<condition>.md`. `score.py`
-reads that naming convention, scores every file with the linter for its
-language, and reports the mean per condition.
+`run.py` writes one file per cell named `<task>__<condition>.md` under
+`--out`. `score.py` is a separate lane: it scores the committed
+`evals/tasks/<id>/` fixtures (source.md vs rewritten.md) for fact
+preservation and emits a JSON summary on stdout (`--json-out`,
+`--markdown-out`, `--strict` optional).
 
 ## What a run leaves behind
 

@@ -25,9 +25,8 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Text Processing :: Linguistic",
 ]
-dependencies = [
-    "requests>=2.28.0",
-]
+# Runtime is stdlib-only by design; dev tooling lives in optional-dependencies.
+dependencies = []
 
 [project.optional-dependencies]
 dev = [

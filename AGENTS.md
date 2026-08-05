@@ -32,7 +32,7 @@ bash scripts/check.sh                            # the gate: tests, then linters
 python3 -m unittest discover -s tests            # the test half alone
 python3 en/ste-lint.py --max 2 en/samples/ste.md
 python3 ru/ru-ste-lint.py --max 2 ru/samples/utr.md
-python3 evals/score.py evals/outputs
+python3 evals/score.py                          # score evals/tasks, JSON summary on stdout
 ```
 
 Exit codes for both linters: 0 at or below the limit, 1 above it, 2 bad option

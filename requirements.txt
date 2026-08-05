@@ -1,5 +1,4 @@
-# Core dependencies
-requests>=2.28.0
+# Core dependencies: none. The runtime is stdlib-only by design.
 
 # Development dependencies
 pytest>=7.0.0
