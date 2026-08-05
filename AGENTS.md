@@ -19,6 +19,7 @@ harness/SKILL.md                             separate skill: agent harness desig
 evals/                                       eval harness, first run 2026-08-04
 examples/                                    before/after pairs, scores in notes
 tests/                                       unittest suite, standard library only
+tools/                                       JSON wrappers for agent harnesses
 scripts/check.sh                             the whole gate in one entry point
 hooks/pre-commit, hooks/pre-push             local git hooks
 RESULTS.md                                   measured scores and their limits
