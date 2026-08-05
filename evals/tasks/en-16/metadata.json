@@ -1,0 +1,6 @@
+{
+  "task_type": "human_rewrite",
+  "source_task": "en-11",
+  "population": "human",
+  "description": "Human rewrites API contract for junior developers. Robot parses result."
+}
