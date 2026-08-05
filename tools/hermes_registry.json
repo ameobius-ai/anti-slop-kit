@@ -1,49 +1,126 @@
 {
-  "registry": "aslint",
-  "version": "0.1.0",
-  "kit": "anti-slop-kit",
-  "description": "Deterministic anti-slop tools for agent harnesses. Every tool prints one JSON object on stdout and nothing else.",
-  "contract": {
-    "output": "stdout carries exactly one JSON object",
-    "exit_codes": {
-      "0": "ran; verdict positive (lint ran, rewrite accepted, hop intact)",
-      "1": "ran; verdict negative (rewrite rejected, bits lost)",
-      "2": "bad arguments or unreadable input"
-    },
-    "properties": {
-      "stdlib_only": true,
-      "deterministic": true,
-      "generates_rewrites": false
-    }
-  },
+  "version": "1.0.0",
+  "schema_version": "openai_function_calling_v1",
+  "hermes_agent_version": "1.0.0",
   "tools": [
     {
       "name": "lint_file",
-      "description": "Lint one markdown file. Auto-detects language; Cyrillic routes to the Russian linter.",
-      "command": "python3 tools/aslint/lint_tool.py {path}",
-      "inputs": {"path": "file to lint"},
-      "returns": "score, per-word violations, line-level findings"
+      "implementation": "tools.aslint.lint_tool.lint_file",
+      "definition": {
+        "name": "lint_file",
+        "description": "Analyze markdown file for anti-slop patterns",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru",
+                "es"
+              ]
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "text",
+                "json",
+                "github"
+              ]
+            }
+          },
+          "required": [
+            "file_path"
+          ]
+        }
+      }
     },
     {
       "name": "lint_text",
-      "description": "Lint a string passed on stdin. Same output shape as lint_file.",
-      "command": "python3 tools/aslint/lint_tool.py --stdin",
-      "inputs": {"stdin": "text to lint"},
-      "returns": "score, per-word violations, line-level findings"
+      "implementation": "tools.aslint.lint_tool.lint_text",
+      "definition": {
+        "name": "lint_text",
+        "description": "Analyze text content for anti-slop patterns",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru",
+                "es"
+              ]
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      }
     },
     {
-      "name": "validate_rewrite",
-      "description": "Score a rewrite against its original. Rejects when the score rises or when a number, underscore identifier, or URL disappeared. Does not generate rewrites.",
-      "command": "python3 tools/aslint/rewrite_tool.py {original} {rewrite}",
-      "inputs": {"original": "source file", "rewrite": "candidate file"},
-      "returns": "verdict accept/reject, score delta, lost tokens"
+      "name": "rewrite_section",
+      "implementation": "tools.aslint.rewrite_tool.rewrite_section",
+      "definition": {
+        "name": "rewrite_section",
+        "description": "Rewrite text to improve clarity",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru",
+                "es"
+              ]
+            },
+            "instructions": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text",
+            "language"
+          ]
+        }
+      }
     },
     {
       "name": "transmit_check",
-      "description": "Fidelity check for one hop in the channel: which numbers, identifiers, URLs, named constraints, and ordering relations survived transmission.",
-      "command": "python3 tools/aslint/transmit_check.py {source} {transmitted} --require \"exact string\" --order TOKEN ...",
-      "inputs": {"source": "original text", "transmitted": "text after the hop"},
-      "returns": "per-check pass flags and the lists of missing bits"
+      "implementation": "tools.aslint.transmit_check.transmit_check",
+      "definition": {
+        "name": "transmit_check",
+        "description": "Validate fidelity during transmission",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "original": {
+              "type": "string"
+            },
+            "transmitted": {
+              "type": "string"
+            },
+            "strict": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "original",
+            "transmitted"
+          ]
+        }
+      }
     }
   ]
 }
