@@ -37,6 +37,9 @@ if [ "$target" != lint ]; then
 	step 'unit tests'
 	"$python_bin" -m unittest discover -s tests
 
+	step 'documented numbers must match reality'
+	"$python_bin" tests/test_documented_numbers.py
+
 	step 'the eval scripts must compile'
 	"$python_bin" -m compileall -q evals
 
