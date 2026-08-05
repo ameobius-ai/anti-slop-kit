@@ -59,3 +59,6 @@ clean:
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name "*.pyd" -delete
 	@echo "Clean complete"
+
+coverage:
+	pytest --cov=tools --cov=evals --cov-report=term-missing
