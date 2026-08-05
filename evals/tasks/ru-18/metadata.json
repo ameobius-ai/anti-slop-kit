@@ -1,0 +1,6 @@
+{
+  "task_type": "human_rewrite",
+  "source_task": "ru-14",
+  "population": "human",
+  "description": "Человек пишет postmortem по таймлайну инцидента. Робот парсит результат."
+}
