@@ -52,8 +52,9 @@ Repository = "https://github.com/ameobius-ai/anti-slop-kit"
 Documentation = "https://github.com/ameobius-ai/anti-slop-kit#readme"
 Issues = "https://github.com/ameobius-ai/anti-slop-kit/issues"
 
-[tool.setuptools]
-packages = ["tools", "tools.aslint", "evals", "harness", "hooks"]
+[tool.setuptools.packages.find]
+# evals/, harness/ and hooks/ have no __init__.py — include only real packages
+include = ["tools", "tools.*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml", "*.yml"]
