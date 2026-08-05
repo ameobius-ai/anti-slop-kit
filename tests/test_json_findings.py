@@ -1,21 +1,24 @@
 """Tests for enhanced JSON output with findings (issue #17)."""
 
 import json
+import pathlib
 import subprocess
 import sys
 import tempfile
 import unittest
 
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
 
 def run_lint(*args, text=None):
     """Run ste-lint.py with given arguments and optional stdin."""
-    cmd = [sys.executable, "en/ste-lint.py"] + list(args)
+    cmd = [sys.executable, str(ROOT / "en" / "ste-lint.py")] + list(args)
     result = subprocess.run(
         cmd,
         input=text,
         capture_output=True,
         text=True,
-        cwd=".."
+        cwd=str(ROOT)
     )
     return result
 
@@ -103,7 +106,8 @@ This is a very long sentence that definitely exceeds twenty words and should be 
         
         # Get explain output
         explain_result = run_lint("--explain", self.temp_file.name)
-        explain_lines = explain_result.stdout.strip().split('\n')
+        # First line is the summary ("words= ... per100w= ..."), findings follow
+        explain_lines = explain_result.stdout.strip().split('\n')[1:]
         
         # Count findings
         self.assertEqual(
