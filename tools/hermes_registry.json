@@ -1,0 +1,49 @@
+{
+  "registry": "aslint",
+  "version": "0.1.0",
+  "kit": "anti-slop-kit",
+  "description": "Deterministic anti-slop tools for agent harnesses. Every tool prints one JSON object on stdout and nothing else.",
+  "contract": {
+    "output": "stdout carries exactly one JSON object",
+    "exit_codes": {
+      "0": "ran; verdict positive (lint ran, rewrite accepted, hop intact)",
+      "1": "ran; verdict negative (rewrite rejected, bits lost)",
+      "2": "bad arguments or unreadable input"
+    },
+    "properties": {
+      "stdlib_only": true,
+      "deterministic": true,
+      "generates_rewrites": false
+    }
+  },
+  "tools": [
+    {
+      "name": "lint_file",
+      "description": "Lint one markdown file. Auto-detects language; Cyrillic routes to the Russian linter.",
+      "command": "python3 tools/aslint/lint_tool.py {path}",
+      "inputs": {"path": "file to lint"},
+      "returns": "score, per-word violations, line-level findings"
+    },
+    {
+      "name": "lint_text",
+      "description": "Lint a string passed on stdin. Same output shape as lint_file.",
+      "command": "python3 tools/aslint/lint_tool.py --stdin",
+      "inputs": {"stdin": "text to lint"},
+      "returns": "score, per-word violations, line-level findings"
+    },
+    {
+      "name": "validate_rewrite",
+      "description": "Score a rewrite against its original. Rejects when the score rises or when a number, underscore identifier, or URL disappeared. Does not generate rewrites.",
+      "command": "python3 tools/aslint/rewrite_tool.py {original} {rewrite}",
+      "inputs": {"original": "source file", "rewrite": "candidate file"},
+      "returns": "verdict accept/reject, score delta, lost tokens"
+    },
+    {
+      "name": "transmit_check",
+      "description": "Fidelity check for one hop in the channel: which numbers, identifiers, URLs, named constraints, and ordering relations survived transmission.",
+      "command": "python3 tools/aslint/transmit_check.py {source} {transmitted} --require \"exact string\" --order TOKEN ...",
+      "inputs": {"source": "original text", "transmitted": "text after the hop"},
+      "returns": "per-check pass flags and the lists of missing bits"
+    }
+  ]
+}
