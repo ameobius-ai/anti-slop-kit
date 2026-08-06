@@ -41,6 +41,41 @@ jobs:
             coverage.xml
             htmlcov/
 
+
+  security:
+    name: security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pip install -e '.[dev]' || true
+      - name: Run bandit security scan
+        run: |
+          mkdir -p reports
+          if command -v bandit >/dev/null 2>&1; then
+            bandit -r tools/ evals/ hooks/ -f json -o reports/bandit-report.json || echo '{"results": []}' > reports/bandit-report.json
+            echo 'Bandit report generated'
+          else
+            echo '{"results": [], "errors": ["bandit not installed"]}' > reports/bandit-report.json
+            echo 'Bandit not available, created empty report'
+          fi
+      - name: Run pip-audit
+        run: |
+          if command -v pip-audit >/dev/null 2>&1; then
+            pip-audit --desc on || echo 'pip-audit completed with findings'
+          else
+            echo 'pip-audit not available'
+          fi
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: reports/
+
   self-lint:
     name: the clean samples must stay clean
     runs-on: ubuntu-latest

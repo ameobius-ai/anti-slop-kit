@@ -36,6 +36,9 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "pre-commit>=3.0.0",
+        "bandit>=1.7.0",
+        "pip-audit>=2.6.0",
+]
 ]
 hermes = [
     "pydantic>=2.0.0",
