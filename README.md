@@ -46,6 +46,28 @@ Or run tests:
 
     python -m pytest tests/
 
+
+## Usage
+
+See the [documentation](docs/) for detailed usage examples and API reference.
+
+### Quick Start
+
+1. Install the package
+2. Import the main module
+3. Use the analysis functions
+4. Review the results
+
+For more examples, check the [examples directory](examples/) and [API documentation](docs/api.md).
+
+### Configuration
+
+Create a configuration file to customize behavior. See [configuration guide](docs/configuration.md) for details.
+
+### Command Line
+
+Use the CLI tool for batch processing and automation. Run `anti-slop --help` for available commands.
+
 ## Who this is for
 
 **Use this for:** API docs, runbooks, release notes, incident reports, onboarding
