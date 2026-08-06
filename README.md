@@ -278,6 +278,65 @@ The linters match patterns. They do not read.
   is unknown. Some long sentences are clear.
 - Use the score to find candidates for a rewrite, not to grade a writer.
 
+## Security
+
+### Security Features
+
+anti-slop-kit includes several security-focused features:
+
+- **Dependency Scanning**: Automated checks for known vulnerabilities
+- **Code Analysis**: Detection of potentially unsafe patterns
+- **Input Validation**: Sanitization of user-provided content
+- **Secure Defaults**: Conservative security settings out of the box
+
+### Best Practices
+
+Follow these security best practices when using anti-slop-kit:
+
+1. **Keep Dependencies Updated**: Regularly update anti-slop-kit and its dependencies
+2. **Review Configuration**: Audit your `.anti-slop.yaml` for sensitive data
+3. **Use Virtual Environments**: Isolate dependencies to prevent conflicts
+4. **Monitor Logs**: Check analysis logs for suspicious patterns
+5. **Limit Permissions**: Run with minimal required permissions
+6. **Secure Configuration Files**: Don't commit secrets to version control
+
+### Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Do NOT open a public issue**
+2. Email: security@ameoblius.ai
+3. Include detailed description and reproduction steps
+4. Allow reasonable time for response and fix
+
+We will acknowledge receipt within 48 hours and provide a timeline for fixing the issue.
+
+### Security Considerations
+
+- **Data Privacy**: anti-slop-kit processes text locally, no data sent to external servers
+- **File Access**: Only reads files you explicitly specify
+- **Network Access**: Minimal network requests (only for dependency updates if enabled)
+- **Code Execution**: Does not execute analyzed code, only parses and analyzes
+
+### Dependency Security
+
+anti-slop-kit uses Dependabot for automated dependency updates:
+
+- Weekly security scans
+- Automatic PRs for security updates
+- Manual review required before merging
+
+For production use, consider:
+- Pinning dependency versions
+- Running `pip-audit` regularly
+- Using lock files (requirements.txt or Pipfile.lock)
+
+### Security Updates
+
+Security updates are released as soon as possible after vulnerability discovery.
+Subscribe to GitHub releases or watch the repository for security announcements.
+
+For more information, see [SECURITY.md](SECURITY.md).
 ## Contributing
 
 See `CONTRIBUTING.md` for the ground rules (standard library only, no shared
