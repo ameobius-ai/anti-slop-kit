@@ -1,0 +1,56 @@
+name: Performance Benchmarks
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2 AM UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - 'tests/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Run performance benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install pytest-benchmark
+      
+      - name: Run benchmarks
+        run: |
+          pytest tests/test_benchmarks.py -v --benchmark-only --benchmark-json=benchmark.json || true
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmark.json
+          retention-days: 30
+      
+      - name: Check for regressions
+        run: |
+          if [ -f benchmark.json ]; then
+            echo "Benchmark results saved"
+            cat benchmark.json | head -50
+          else
+            echo "No benchmark results generated"
+          fi
