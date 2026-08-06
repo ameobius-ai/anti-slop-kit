@@ -22,18 +22,21 @@ jobs:
       - name: Run the test half of the gate
         run: bash scripts/check.sh tests
       
-      - name: Install pytest-cov
-        run: pip install pytest-cov
+      - name: Run tests with coverage (optional)
+        run: |
+          pip install pytest-cov || true
+          pytest tests/ --cov=tools --cov=evals --cov-report=xml --cov-report=html --cov-report=term-missing || true
+          if [ -f coverage.xml ]; then
+            echo "Coverage report generated successfully"
+          else
+            echo "Coverage report not generated (this is OK)"
+          fi
       
-      - name: Run tests with coverage
-        run: pytest tests/ --cov=tools --cov=evals --cov-report=xml --cov-report=html --cov-report=term-missing || true
-      
-      - name: Upload coverage report
+      - name: Upload coverage report (if exists)
         uses: actions/upload-artifact@v4
-        continue-on-error: true
-        if: always()
+        if: always() && hashFiles('coverage.xml') != ''
         with:
-          name: coverage-report
+          name: coverage-report-${{ matrix.python-version }}
           path: |
             coverage.xml
             htmlcov/
