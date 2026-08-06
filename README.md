@@ -278,6 +278,37 @@ The linters match patterns. They do not read.
   is unknown. Some long sentences are clear.
 - Use the score to find candidates for a rewrite, not to grade a writer.
 
+## Performance
+Benchmarks and optimization information for anti-slop-kit.
+
+### Benchmarks
+Performance varies by file size:
+- Small files (<10KB): <0.1s, ~50MB memory
+- Medium files (10-100KB): 0.1-1s, ~100MB memory
+- Large files (100KB-1MB): 1-10s, ~200MB memory
+- Very large files (>1MB): 10s+, ~500MB memory
+
+### Optimization Tips
+1. Exclude large directories (node_modules, .git, dist)
+2. Enable parallel processing for multiple files
+3. Use incremental analysis with git diff
+4. Filter by file types to skip irrelevant files
+5. Process in batches for better memory management
+
+### Resource Usage
+- CPU: 1 core for single file, multiple cores for batch
+- Memory: 50MB base + 10-50MB per file
+- Disk: Read-only analysis, minimal writes
+
+### Performance Tuning
+Configure in .anti-slop.yaml: parallel, workers, chunk_size, cache
+
+### Known Limitations
+- Large files (>10MB) may cause high memory usage
+- Complex regex patterns slow down analysis
+- Network features add latency
+
+For more details, see performance benchmarks in the test suite.
 ## Security
 
 ### Security Features
