@@ -278,6 +278,34 @@ The linters match patterns. They do not read.
   is unknown. Some long sentences are clear.
 - Use the score to find candidates for a rewrite, not to grade a writer.
 
+## Examples
+
+See the [examples directory](examples/) for practical usage examples including:
+
+- **Basic Analysis**: Analyze single text files
+- **Batch Processing**: Process multiple files efficiently  
+- **Custom Patterns**: Add your own detection rules
+- **Configuration**: Customize behavior with YAML
+- **CI/CD Integration**: Use with GitHub Actions and pre-commit hooks
+
+### Quick Start
+
+1. Install the package
+2. Create a configuration file (optional)
+3. Run analysis on your files
+4. Review results and adjust threshold
+
+For detailed examples with code, visit the [examples directory](examples/) or check the [documentation](docs/).
+
+### Common Use Cases
+
+- **Code Review**: Check PR descriptions for AI patterns
+- **Documentation**: Ensure technical writing quality
+- **Content Creation**: Review blog posts and articles
+- **CI/CD Pipeline**: Automatically check content quality
+- **Pre-commit Hook**: Catch issues before committing
+
+For more examples, see [USAGE.md](docs/USAGE.md).
 ## Performance
 Benchmarks and optimization information for anti-slop-kit.
 
