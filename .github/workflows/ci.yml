@@ -34,7 +34,7 @@ jobs:
       
       - name: Upload coverage report (if exists)
         uses: actions/upload-artifact@v4
-        if: always() && hashFiles('coverage.xml') != ''
+        if: hashFiles('coverage.xml')
         with:
           name: coverage-report-${{ matrix.python-version }}
           path: |
