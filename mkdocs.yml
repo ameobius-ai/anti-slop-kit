@@ -1,0 +1,7 @@
+site_name: Anti-Slop Kit
+repo_url: https://github.com/ameobius-ai/anti-slop-kit
+theme:
+  name: material
+  palette:
+    - scheme: default
+    - scheme: slate
