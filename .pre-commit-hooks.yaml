@@ -1,0 +1,17 @@
+- id: anti-slop-check
+  name: Anti-Slop Check
+  description: Run anti-slop linter on code and documentation
+  entry: aslint
+  language: python
+  types: [python]
+  additional_dependencies: ['.']
+  pass_filenames: true
+
+- id: anti-slop-docs
+  name: Anti-Slop Docs Check
+  description: Run anti-slop linter on documentation
+  entry: aslint
+  language: python
+  types: [markdown]
+  additional_dependencies: ['.']
+  pass_filenames: true
