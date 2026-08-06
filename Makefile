@@ -59,3 +59,13 @@ clean:
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name "*.pyd" -delete
 	@echo "Clean complete"
+
+security:
+	pip install bandit pip-audit
+	bandit -r tools/ evals/ hooks/ -f txt
+	pip-audit --desc on
+
+security-json:
+	pip install bandit
+	bandit -r tools/ evals/ hooks/ -f json -o bandit-report.json
+	@echo "Security report written to bandit-report.json"
