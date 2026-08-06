@@ -4,14 +4,16 @@ import sys
 import os
 import subprocess
 from pathlib import Path
+from typing import Optional
 
-def run_cmd(cmd, cwd=None):
+def run_cmd(cmd: str, cwd: Optional[Path] = None) -> int:
     """Run command and return exit code."""
     print(f"\n== {cmd}")
     result = subprocess.run(cmd, shell=True, cwd=cwd)
     return result.returncode
 
-def main():
+def main() -> int:
+    """Main entry point."""
     if len(sys.argv) > 1 and sys.argv[1] not in ['all', 'tests', 'lint']:
         print(f"usage: {sys.argv[0]} [all|tests|lint]", file=sys.stderr)
         return 2
