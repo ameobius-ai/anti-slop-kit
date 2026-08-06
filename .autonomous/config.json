@@ -1,0 +1,6 @@
+{
+  "target_pulls": [106],
+  "auto_merge_green_prs": true,
+  "max_new_issues_per_run": 5,
+  "default_branch": ""
+}
