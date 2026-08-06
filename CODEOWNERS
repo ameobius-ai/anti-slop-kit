@@ -1,0 +1,29 @@
+# Code Ownership Rules
+# 
+# This file defines who should be automatically requested for review
+# when files are changed in a pull request.
+#
+# Format: <file-pattern> <@user> <@team>
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @ameobius-ai
+
+# Documentation
+/docs/ @ameobius-ai
+*.md @ameobius-ai
+
+# Core library code
+/tools/ @ameobius-ai
+/scripts/ @ameobius-ai
+
+# Tests
+/tests/ @ameobius-ai
+
+# CI/CD configuration
+/.github/workflows/ @ameobius-ai
+
+# Build configuration
+/pyproject.toml @ameobius-ai
+/setup.py @ameobius-ai
+/setup.cfg @ameobius-ai
