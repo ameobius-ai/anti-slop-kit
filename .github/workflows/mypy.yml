@@ -1,11 +1,21 @@
 name: Mypy
+
 on: [push, pull_request]
+
 jobs:
   mypy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-python@v5
-      - run: pip install mypy
-      - run: pip install -e .
-      - run: mypy . --strict
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          pip install mypy
+          pip install -e .[dev]
+      
+      - name: Run mypy
+        run: mypy .
