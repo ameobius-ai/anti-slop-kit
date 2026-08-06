@@ -396,6 +396,62 @@ Security updates are released as soon as possible after vulnerability discovery.
 Subscribe to GitHub releases or watch the repository for security announcements.
 
 For more information, see [SECURITY.md](SECURITY.md).
+## FAQ
+
+### General Questions
+
+**Q: What does anti-slop-kit do?**
+A: It analyzes text to detect AI-generated patterns and provides a quality score.
+
+**Q: What languages are supported?**
+A: Currently optimized for English. Other languages planned for future releases.
+
+**Q: Is it free to use?**
+A: Yes, MIT license. Free for personal and commercial use.
+
+**Q: Where can I get help?**
+A: Check [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) or open a [GitHub issue](https://github.com/ameoblius-ai/anti-slop-kit/issues).
+
+### Usage Questions
+
+**Q: How do I install it?**
+A: `pip install anti-slop-kit` (see [Installation](#installation) section above)
+
+**Q: How do I configure it?**
+A: Create `.anti-slop.yaml` in your project root (see [Configuration](#usage) section)
+
+**Q: Can I use it with pre-commit?**
+A: Yes, see [Examples](#examples) section for pre-commit hook setup
+
+**Q: Does it work in CI/CD?**
+A: Yes, see [Examples](#examples) for GitHub Actions integration
+
+### Technical Questions
+
+**Q: What's the scoring system?**
+A: 0-100 scale: 90-100 Excellent, 70-89 Good, 50-69 Fair, 0-49 Poor
+
+**Q: Can I customize detection patterns?**
+A: Yes, add custom patterns in configuration file (see [Examples](#examples))
+
+**Q: How fast is it?**
+A: See [Performance](#performance) section for benchmarks
+
+**Q: Does it send data anywhere?**
+A: No, all processing is local. No external API calls.
+
+### Troubleshooting
+
+**Q: Installation fails?**
+A: See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common solutions
+
+**Q: Too many false positives?**
+A: Adjust strictness level or add exclusions in configuration
+
+**Q: Running too slow?**
+A: See [Performance](#performance) for optimization tips
+
+For more questions, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) or open a [GitHub issue](https://github.com/ameoblius-ai/anti-slop-kit/issues).
 ## Contributing
 
 See `CONTRIBUTING.md` for the ground rules (standard library only, no shared
