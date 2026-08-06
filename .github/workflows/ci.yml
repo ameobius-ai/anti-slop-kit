@@ -23,14 +23,13 @@ jobs:
             pyproject.toml
             requirements*.txt
           python-version: ${{ matrix.python-version }}
-      - name: Run the test half of the gate
-        name: Run checks
+      - name: Run checks
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            python scripts/check.py tests
+            python scripts/check.py lint
           else
-            bash scripts/check.sh tests
+            bash scripts/check.sh lint
           fi
       - name: Run tests with coverage (optional)
         run: |
@@ -102,14 +101,13 @@ jobs:
             pyproject.toml
             requirements*.txt
           python-version: "3.13"
-      - name: Run the lint half of the gate
+      - name: Run checks
         env:
           ANTI_SLOP_FORMAT: github
-        name: Run checks
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            python scripts/check.py tests
+            python scripts/check.py lint
           else
-            bash scripts/check.sh tests
+            bash scripts/check.sh lint
           fi
