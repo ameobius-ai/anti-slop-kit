@@ -24,8 +24,14 @@ jobs:
             requirements*.txt
           python-version: ${{ matrix.python-version }}
       - name: Run the test half of the gate
-        run: bash scripts/check.sh tests
-      
+        name: Run checks
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            python scripts/check.py ${{ matrix.check-target }}
+          else
+            bash scripts/check.sh ${{ matrix.check-target }}
+          fi
       - name: Run tests with coverage (optional)
         run: |
           pip install pytest-cov || true
@@ -99,4 +105,11 @@ jobs:
       - name: Run the lint half of the gate
         env:
           ANTI_SLOP_FORMAT: github
-        run: bash scripts/check.sh lint
+        name: Run checks
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            python scripts/check.py ${{ matrix.check-target }}
+          else
+            bash scripts/check.sh ${{ matrix.check-target }}
+          fi
