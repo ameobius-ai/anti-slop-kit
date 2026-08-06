@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any, Dict, List, Optional, Tuple
 
 API = "https://api.github.com"
 
@@ -44,7 +45,7 @@ class ApiError(Exception):
         self.body = body
         super().__init__(f"HTTP {code} {method} {path}: {body[:500]}")
 
-def gh_api(method, path, token, payload=None):
+def gh_api(method: str, path: str, token: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     url = path if path.startswith("http") else f"{API}/{path.lstrip('/')}"
     body = None
     if payload is not None:
@@ -78,7 +79,7 @@ def gh_api(method, path, token, payload=None):
     if last_error is not None: raise last_error
     raise RuntimeError("unreachable")
 
-def load_config():
+def load_config() -> Dict[str, Any]:
     cfg = dict(DEFAULT_CONFIG)
     try:
         with open(".autonomous/config.json", encoding="utf-8") as fh:
@@ -88,7 +89,7 @@ def load_config():
     if not cfg.get("default_branch"): cfg["default_branch"] = None
     return cfg
 
-def ensure_label(repo, token, name, color, description):
+def ensure_label(repo: str, token: str, name: str, color: str, description: str) -> None:
     quoted = urllib.parse.quote(name, safe="")
     try:
         gh_api("GET", f"repos/{repo}/labels/{quoted}", token); return
@@ -98,18 +99,18 @@ def ensure_label(repo, token, name, color, description):
         gh_api("POST", f"repos/{repo}/labels", token, {"name": name, "color": color, "description": description})
     except ApiError: pass
 
-def ensure_labels(repo, token):
+def ensure_labels(repo: str, token: str) -> None:
     ensure_label(repo, token, "autonomous", "0E8A16", "Managed by autonomous maintainer")
     ensure_label(repo, token, "blocker", "D93F0B", "Blocks delivery")
     ensure_label(repo, token, "infrastructure", "1D76DB", "Repository infrastructure")
 
-def find_by_marker(items, marker):
+def find_by_marker(items: List[Dict[str, Any]], marker: str) -> Optional[Dict[str, Any]]:
     for item in items:
         body = item.get("body") or ""
         if marker in body: return item
     return None
 
-def create_issue(repo, token, title, body, labels):
+def create_issue(repo: str, token: str, title: str, body: str, labels: Optional[List[str]] = None) -> Dict[str, Any]:
     payload = {"title": title, "body": body}
     if labels: payload["labels"] = labels
     try: return gh_api("POST", f"repos/{repo}/issues", token, payload)
@@ -119,19 +120,19 @@ def create_issue(repo, token, title, body, labels):
             return gh_api("POST", f"repos/{repo}/issues", token, payload)
         raise
 
-def upsert_issue(repo, token, marker, title, body, labels, open_issues):
+def upsert_issue(repo: str, token: str, marker: str, title: str, body: str, labels: Optional[List[str]], open_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     issue = find_by_marker(open_issues, marker)
     if issue:
         return gh_api("PATCH", f"repos/{repo}/issues/{issue['number']}", token, {"title": title, "body": body, "state": "open"})
     return create_issue(repo, token, title, body, labels)
 
-def close_issue_by_marker(repo, token, marker, open_issues):
+def close_issue_by_marker(repo: str, token: str, marker: str, open_issues: List[Dict[str, Any]]) -> None:
     issue = find_by_marker(open_issues, marker)
     if not issue: return
     if issue.get("state") != "open": return
     gh_api("PATCH", f"repos/{repo}/issues/{issue['number']}", token, {"state": "closed", "state_reason": "completed"})
 
-def upsert_comment(repo, token, number, marker, body):
+def upsert_comment(repo: str, token: str, number: int, marker: str, body: str) -> Dict[str, Any]:
     comments = gh_api("GET", f"repos/{repo}/issues/{number}/comments?per_page=100", token)
     if isinstance(comments, list):
         for comment in comments:
@@ -139,7 +140,7 @@ def upsert_comment(repo, token, number, marker, body):
                 return gh_api("PATCH", f"repos/{repo}/issues/comments/{comment['id']}", token, {"body": body})
     return gh_api("POST", f"repos/{repo}/issues/{number}/comments", token, {"body": body})
 
-def fetch_file_text(repo, token, branch, path):
+def fetch_file_text(repo: str, token: str, branch: str, path: str) -> Optional[str]:
     quoted = urllib.parse.quote(path, safe="/")
     try:
         data = gh_api("GET", f"repos/{repo}/contents/{quoted}?ref={urllib.parse.quote(branch, safe='')}", token)
@@ -151,7 +152,7 @@ def fetch_file_text(repo, token, branch, path):
     if encoding == "base64": return base64.b64decode(content).decode("utf-8", "replace")
     return content
 
-def commit_health(repo, token, sha):
+def commit_health(repo: str, token: str, sha: str) -> Tuple[str, List[str]]:
     details = []; pending = 0; green = 0; red = 0
     check_runs = gh_api("GET", f"repos/{repo}/commits/{sha}/check-runs?per_page=100", token).get("check_runs", [])
     for run in check_runs:
@@ -176,7 +177,7 @@ def commit_health(repo, token, sha):
     else: classification = "unknown"
     return classification, details[:100]
 
-def pr_comment_body(pr_number, classification, mergeable_state, details, action):
+def pr_comment_body(pr_number: int, classification: str, mergeable_state: str, details: List[str], action: str) -> str:
     marker = PR_COMMENT_MARKER.format(pr_number)
     lines = [marker, "Autonomous maintainer status.", "", f"classification: `{classification}`", f"mergeable_state: `{mergeable_state}`", f"action: `{action}`", ""]
     if details: lines.append("Details:"); lines.extend([f"- {item}" for item in details])
@@ -184,7 +185,7 @@ def pr_comment_body(pr_number, classification, mergeable_state, details, action)
     lines.append(""); lines.append("Fail-closed rule: merge only when checks and mergeability are green.")
     return "\n".join(lines)
 
-def blocker_body(pr_number, classification, mergeable_state, details, action):
+def blocker_body(pr_number: int, classification: str, mergeable_state: str, details: List[str], action: str) -> str:
     marker = BLOCKER_MARKER.format(pr_number)
     lines = [marker, f"PR #{pr_number} is blocked.", "", f"classification: `{classification}`", f"mergeable_state: `{mergeable_state}`", f"action: `{action}`", ""]
     if details: lines.append("Details:"); lines.extend([f"- {item}" for item in details])
@@ -192,13 +193,13 @@ def blocker_body(pr_number, classification, mergeable_state, details, action):
     lines.append(""); lines.append("Close this issue after the blocker is resolved. The maintainer will recreate it if the blocker returns.")
     return "\n".join(lines)
 
-def create_or_update_blocker(repo, token, pr_number, classification, mergeable_state, details, action, open_issues):
+def create_or_update_blocker(repo: str, token: str, pr_number: int, classification: str, mergeable_state: str, details: List[str], action: str, open_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     marker = BLOCKER_MARKER.format(pr_number)
     title = f"Blocker: PR #{pr_number} requires attention"
     body = blocker_body(pr_number, classification, mergeable_state, details, action)
     return upsert_issue(repo, token, marker, title, body, ["blocker", "autonomous"], open_issues)
 
-def process_pr(repo, token, pr_number, cfg, open_issues):
+def process_pr(repo: str, token: str, pr_number: int, cfg: Dict[str, Any], open_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     row = {"pr": pr_number, "state": "missing", "classification": "missing", "action": "none"}
     try: pr = gh_api("GET", f"repos/{repo}/pulls/{pr_number}", token)
     except ApiError as exc:
@@ -238,7 +239,7 @@ def process_pr(repo, token, pr_number, cfg, open_issues):
     else: close_issue_by_marker(repo, token, BLOCKER_MARKER.format(pr_number), open_issues)
     return row
 
-def missing_infrastructure(repo, token, branch):
+def missing_infrastructure(repo: str, token: str, branch: str) -> List[Dict[str, Any]]:
     tree = gh_api("GET", f"repos/{repo}/git/trees/{urllib.parse.quote(branch, safe='')}?recursive=1", token)
     paths = set()
     for item in tree.get("tree", []):
@@ -253,7 +254,7 @@ def missing_infrastructure(repo, token, branch):
         if text is None or contains["needle"] not in text: missing.append(item)
     return missing
 
-def infra_issue_body(item, branch):
+def infra_issue_body(item: Dict[str, Any], branch: str) -> str:
     marker = INFRA_MARKER.format(item["key"])
     lines = [marker, f"Missing infrastructure: {item['title']}", "", f"Autonomous research detected this on default branch `{branch}`.", "", "Expected artifacts:"]
     for path in item.get("paths", []): lines.append(f"- `{path}`")
@@ -262,7 +263,7 @@ def infra_issue_body(item, branch):
     lines.extend(["", "Acceptance criteria:", "- Add the missing artifacts.", "- Keep CI green.", "- Do not weaken existing security or test gates."])
     return "\n".join(lines)
 
-def create_infra_issues(repo, token, missing, open_issues, branch, max_new):
+def create_infra_issues(repo: str, token: str, missing: List[Dict[str, Any]], open_issues: List[Dict[str, Any]], branch: str, max_new: int) -> List[Dict[str, Any]]:
     created = []
     for item in missing:
         if len(created) >= max_new: break
@@ -272,7 +273,7 @@ def create_infra_issues(repo, token, missing, open_issues, branch, max_new):
         created.append(issue)
     return created
 
-def tracker_body(pr_rows, missing, created_issues, branch):
+def tracker_body(pr_rows: List[Dict[str, Any]], missing: List[Dict[str, Any]], created_issues: List[Dict[str, Any]], branch: str) -> str:
     now = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     lines = [TRACKER_MARKER, f"Last autonomous run: {now}", f"Default branch: `{branch}`", "", "## Target PRs", "", "| PR | state | classification | action |", "| ---: | --- | --- | --- |"]
     if pr_rows:
@@ -289,7 +290,7 @@ def tracker_body(pr_rows, missing, created_issues, branch):
     lines.extend(["", "This issue is maintained automatically.", "Do not remove the marker comment."])
     return "\n".join(lines)
 
-def create_or_update_tracker(repo, token, pr_rows, missing, created_issues, open_issues, branch):
+def create_or_update_tracker(repo: str, token: str, pr_rows: List[Dict[str, Any]], missing: List[Dict[str, Any]], created_issues: List[Dict[str, Any]], open_issues: List[Dict[str, Any]], branch: str) -> Dict[str, Any]:
     title = "Autonomous task tracker"
     body = tracker_body(pr_rows, missing, created_issues, branch)
     issue = find_by_marker(open_issues, TRACKER_MARKER)
@@ -297,7 +298,7 @@ def create_or_update_tracker(repo, token, pr_rows, missing, created_issues, open
         return gh_api("PATCH", f"repos/{repo}/issues/{issue['number']}", token, {"title": title, "body": body, "state": "open"})
     return create_issue(repo, token, title, body, ["autonomous"])
 
-def main():
+def main() -> int:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
     if not token or not repo:
