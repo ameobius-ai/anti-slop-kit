@@ -316,7 +316,13 @@ def main() -> int:
     missing = missing_infrastructure(repo, token, branch)
     created_issues = create_infra_issues(repo, token, missing, open_issues, branch, int(cfg.get("max_new_issues_per_run", 5)))
     tracker = create_or_update_tracker(repo, token, pr_rows, missing, created_issues, open_issues, branch)
-    print(json.dumps({"tracker": tracker.get("html_url"), "target_prs": pr_rows, "created_issues": [issue.get("number") for issue in created_issues], "missing_infrastructure": [item["key"] for item in missing]}, ensure_ascii=False, indent=2))
+    result = {
+        "tracker": tracker.get("html_url"),
+        "target_prs": pr_rows,
+        "created_issues": [issue.get("number") for issue in created_issues],
+        "missing_infrastructure": [item["key"] for item in missing]
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 if __name__ == "__main__":
