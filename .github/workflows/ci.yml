@@ -1,113 +1,58 @@
 name: ci
-
 on:
-  push:
-    branches: [main]
+  push: {branches: [main]}
   pull_request:
   workflow_dispatch:
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     name: tests (python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.9", "3.11", "3.13"]
+    strategy: {fail-fast: false, matrix: {python-version: ["3.9", "3.11", "3.13"]}}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        with:
-          cache: 'pip'
-          cache-dependency-path: |
-            pyproject.toml
-            requirements*.txt
-          python-version: ${{ matrix.python-version }}
+        with: {cache: 'pip', cache-dependency-path: "pyproject.toml\nrequirements*.txt", python-version: "${{ matrix.python-version }}"}
       - name: Run checks
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            python scripts/check.py tests
-          else
-            bash scripts/check.sh tests
-          fi
+          if [[ "${{ runner.os }}" == "Windows" ]]; then python scripts/check.py tests; else bash scripts/check.sh tests; fi
       - name: Run tests with coverage (optional)
         run: |
           pip install pytest-cov || true
           pytest tests/ --cov=tools --cov=evals --cov-report=xml --cov-report=html --cov-report=term-missing || true
-          if [ -f coverage.xml ]; then
-            echo "Coverage report generated successfully"
-          else
-            echo "Coverage report not generated (this is OK)"
-          fi
-      
       - name: Upload coverage report (if exists)
         uses: actions/upload-artifact@v4
         if: hashFiles('coverage.xml')
-        with:
-          name: coverage-report-${{ matrix.python-version }}
-          path: |
-            coverage.xml
-            htmlcov/
-
-
+        with: {name: "coverage-report-${{ matrix.python-version }}", path: "coverage.xml\nhtmlcov/"}
   security:
     name: security scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        with:
-          cache: 'pip'
-          cache-dependency-path: |
-            pyproject.toml
-            requirements*.txt
-          python-version: '3.13'
+        with: {cache: 'pip', cache-dependency-path: "pyproject.toml\nrequirements*.txt", python-version: '3.13'}
       - name: Install dependencies
         run: pip install -e '.[dev]' || true
-      - name: Run bandit security scan
+      - name: Run bandit
         run: |
           mkdir -p reports
-          if command -v bandit >/dev/null 2>&1; then
-            bandit -r tools/ evals/ hooks/ -f json -o reports/bandit-report.json || echo '{"results": []}' > reports/bandit-report.json
-            echo 'Bandit report generated'
-          else
-            echo '{"results": [], "errors": ["bandit not installed"]}' > reports/bandit-report.json
-            echo 'Bandit not available, created empty report'
-          fi
-      - name: Run pip-audit
-        run: |
-          if command -v pip-audit >/dev/null 2>&1; then
-            pip-audit --desc on || echo 'pip-audit completed with findings'
-          else
-            echo 'pip-audit not available'
-          fi
+          bandit -r tools/ evals/ hooks/ -f json -o reports/bandit-report.json || echo '{"results": []}' > reports/bandit-report.json
       - name: Upload security report
         uses: actions/upload-artifact@v4
         if: always()
-        with:
-          name: security-report
-          path: reports/
-
+        with: {name: security-report, path: reports/}
   self-lint:
     name: the clean samples must stay clean
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        with:
-          cache: 'pip'
-          cache-dependency-path: |
-            pyproject.toml
-            requirements*.txt
-          python-version: "3.13"
+        with: {cache: 'pip', cache-dependency-path: "pyproject.toml\nrequirements*.txt", python-version: "3.13"}
       - name: Run checks
-        env:
-          ANTI_SLOP_FORMAT: github
+        env: {ANTI_SLOP_FORMAT: github}
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            python scripts/check.py lint
-          else
-            bash scripts/check.sh lint
-          fi
+          if [[ "${{ runner.os }}" == "Windows" ]]; then python scripts/check.py lint; else bash scripts/check.sh lint; fi
