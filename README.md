@@ -13,6 +13,39 @@ from technical prose. Two languages: English (ASD-STE100 mechanics) and Russian
 A skill tells the model how to write. A linter proves whether the model did it.
 The linter is the part most anti-slop advice leaves out.
 
+## Installation
+
+### Prerequisites
+
+- Python 3.9 or higher
+- pip (Python package manager)
+
+### Quick Install
+
+Install via pip:
+
+    pip install anti-slop-kit
+
+### Development Install
+
+Clone and install in development mode:
+
+    git clone https://github.com/ameoblius-ai/anti-slop-kit.git
+    cd anti-slop-kit
+    pip install -e ".[dev]"
+    pip install pre-commit
+    pre-commit install
+
+### Verify Installation
+
+Check if package is installed:
+
+    anti-slop-kit --version
+
+Or run tests:
+
+    python -m pytest tests/
+
 ## Who this is for
 
 **Use this for:** API docs, runbooks, release notes, incident reports, onboarding
