@@ -27,9 +27,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            python scripts/check.py lint
+            python scripts/check.py tests
           else
-            bash scripts/check.sh lint
+            bash scripts/check.sh tests
           fi
       - name: Run tests with coverage (optional)
         run: |
