@@ -1,35 +1,23 @@
-"""validate_rewrite: score a rewrite against its original.
+"""validate_rewrite: score a rewrite against its original."""
 
-The tool does not generate rewrites. Generation belongs to the model;
-this tool only measures what the model produced. Per PURPOSE.md the
-LLM stays outside the tool.
-
-A rewrite passes when it satisfies both conditions:
-1. the score does not rise: rewrite total_per100w <= original;
-2. nothing lossy disappeared: every number, underscore identifier and
-   URL present in the original is still present in the rewrite.
-
-Usage:
-    python3 tools/aslint/rewrite_tool.py ORIGINAL.md REWRITE.md [--lang en|ru]
-
-Exit codes: 0 accepted, 1 rejected, 2 bad arguments or unreadable input.
-"""
+from __future__ import annotations
 
 import pathlib
 import sys
+from typing import Any
 
-try:  # package import (tests, harness registry) or direct script run
+try:
     from tools.aslint.common import emit, lint_text, lost_tokens
 except ImportError:
-    from common import emit, lint_text, lost_tokens
+    from common import emit, lint_text, lost_tokens  # type: ignore[no-redef]
 
 
-def validate_rewrite(original, rewrite, lang=None):
+def validate_rewrite(original: str, rewrite: str, lang: str | None = None) -> dict[str, Any]:
     """Compare two texts. Returns the tool result dict with a verdict."""
     orig_lang, orig = lint_text(original, lang)
     _, rew = lint_text(rewrite, orig_lang)
     lost = lost_tokens(original, rewrite)
-    reasons = []
+    reasons: list[str] = []
     delta = round(rew["total_per100w"] - orig["total_per100w"], 2)
     if delta > 0:
         reasons.append("score rose by %.2f per 100 words" % delta)
@@ -52,8 +40,10 @@ def validate_rewrite(original, rewrite, lang=None):
     }
 
 
-def main(argv):
-    lang, files = None, []
+def main(argv: list[str]) -> int:
+    """Main entry point for rewrite validation tool."""
+    lang: str | None = None
+    files: list[str] = []
     i = 0
     while i < len(argv):
         a = argv[i]
