@@ -535,3 +535,25 @@ Other tools for improving writing quality:
 - **[Hemingway Editor](https://hemingwayapp.com/)** - Writing clarity tool
 - **[Grammarly](https://www.grammarly.com/)** - AI writing assistant
 - **[LanguageTool](https://languagetool.org/)** - Grammar and style checker
+
+
+## Roadmap
+
+### Current Focus (Q3 2026)
+
+- Improve test coverage to 90%+
+- Add support for more languages (Spanish, French, German)
+- Create web interface for interactive analysis
+
+### Planned Features (Q4 2026)
+
+- IDE plugins (VSCode, IntelliJ IDEA)
+- REST API for remote analysis
+- Custom rule engine for user-defined patterns
+- Batch processing optimizations
+
+### Future Vision (2027)
+
+- Real-time analysis mode
+- Integration with popular writing tools
+- Enterprise features (team dashboards, reporting)
