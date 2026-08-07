@@ -73,7 +73,7 @@ def gh_api(method: str, path: str, token: str, payload: Optional[Dict[str, Any]]
                 time.sleep(5 * (attempt + 1)); continue
             raise last_error
         except Exception as exc:
-            last_error = exc
+            last_error: Optional[Exception] = exc
             if attempt == 2: raise
             time.sleep(2 ** attempt)
     if last_error is not None: raise last_error
@@ -111,7 +111,7 @@ def find_by_marker(items: List[Dict[str, Any]], marker: str) -> Optional[Dict[st
     return None
 
 def create_issue(repo: str, token: str, title: str, body: str, labels: Optional[List[str]] = None) -> Dict[str, Any]:
-    payload = {"title": title, "body": body}
+    payload: Dict[str, Any] = {"title": title, "body": body}
     if labels: payload["labels"] = labels
     try: return gh_api("POST", f"repos/{repo}/issues", token, payload)
     except ApiError as exc:
@@ -246,9 +246,10 @@ def missing_infrastructure(repo: str, token: str, branch: str) -> List[Dict[str,
         if item.get("type") == "blob": paths.add(item.get("path"))
     missing = []
     for item in CATALOG:
-        required_paths = item.get("paths", [])
+        item_dict = item if isinstance(item, dict) else {}
+        required_paths = item_dict.get("paths", [])
         if any(path not in paths for path in required_paths): missing.append(item); continue
-        contains = item.get("file_contains")
+        contains = item_dict.get("file_contains")
         if not contains: continue
         text = fetch_file_text(repo, token, branch, contains["path"])
         if text is None or contains["needle"] not in text: missing.append(item)
@@ -264,7 +265,7 @@ def infra_issue_body(item: Dict[str, Any], branch: str) -> str:
     return "\n".join(lines)
 
 def create_infra_issues(repo: str, token: str, missing: List[Dict[str, Any]], open_issues: List[Dict[str, Any]], branch: str, max_new: int) -> List[Dict[str, Any]]:
-    created = []
+    created: List[Dict[str, Any]] = []
     for item in missing:
         if len(created) >= max_new: break
         marker = INFRA_MARKER.format(item["key"])
@@ -309,10 +310,12 @@ def main() -> int:
     branch = cfg.get("default_branch") or repo_info.get("default_branch") or "main"
     open_items = gh_api("GET", f"repos/{repo}/issues?state=open&per_page=100", token)
     if not isinstance(open_items, list): open_items = []
-    open_issues = [item for item in open_items if "pull_request" not in item]
+    open_issues: List[Dict[str, Any]] = [item for item in open_items if isinstance(item, dict) and "pull_request" not in item]
     pr_rows = []
     for pr_number in cfg.get("target_pulls", []):
-        pr_rows.append(process_pr(repo, token, int(pr_number), cfg, open_issues))
+        pr_result = process_pr(repo, token, int(pr_number), cfg, open_issues)
+        if isinstance(pr_result, dict):
+            pr_rows.append(pr_result)
     missing = missing_infrastructure(repo, token, branch)
     created_issues = create_infra_issues(repo, token, missing, open_issues, branch, int(cfg.get("max_new_issues_per_run", 5)))
     tracker = create_or_update_tracker(repo, token, pr_rows, missing, created_issues, open_issues, branch)
