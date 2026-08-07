@@ -140,3 +140,109 @@ def _parse_dict(lines: List[str]) -> Dict[str, Any]:
             result[key.strip()] = _parse_value(value.strip())
     return result
 
+
+
+def validate_rules(rules_data: Dict[str, Any], path: str) -> List[Dict[str, Any]]:
+    """Validate custom rules and return list of rule objects."""
+    if 'rules' not in rules_data:
+        raise CustomRulesError(f"{path}: missing 'rules' key")
+    
+    rules_list = rules_data['rules']
+    if not isinstance(rules_list, list):
+        raise CustomRulesError(f"{path}: 'rules' must be a list")
+    
+    validated = []
+    for i, rule in enumerate(rules_list):
+        if not isinstance(rule, dict):
+            raise CustomRulesError(f"{path}: rule {i} must be a dictionary")
+        
+        for field in ('id', 'pattern', 'severity', 'message'):
+            if field not in rule:
+                raise CustomRulesError(f"{path}: rule {i} missing required field '{field}'")
+        
+        if rule['severity'] not in ('high', 'medium', 'low'):
+            raise CustomRulesError(f"{path}: rule {i} has invalid severity '{rule['severity']}'")
+        
+        try:
+            re.compile(rule['pattern'])
+        except re.error as e:
+            raise CustomRulesError(f"{path}: rule {i} has invalid regex pattern: {e}")
+        
+        validated.append({
+            'id': rule['id'],
+            'pattern': rule['pattern'],
+            'severity': rule['severity'],
+            'message': rule['message'],
+            'category': rule.get('category', 'custom'),
+        })
+    
+    return validated
+
+
+def load_custom_rules(paths: List[str]) -> List[Dict[str, Any]]:
+    """Load custom rules from multiple YAML files."""
+    all_rules = []
+    
+    for path in paths:
+        if not os.path.exists(path):
+            raise CustomRulesError(f"Rules file not found: {path}")
+        
+        rules_data = load_yaml_file(path)
+        validated = validate_rules(rules_data, path)
+        all_rules.extend(validated)
+    
+    return all_rules
+
+
+def apply_custom_rules(text: str, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Apply custom rules to text and return findings."""
+    findings = []
+    lines = text.split('\n')
+    
+    for rule in rules:
+        pattern = re.compile(rule['pattern'], re.IGNORECASE)
+        
+        for line_num, line in enumerate(lines, 1):
+            for match in pattern.finditer(line):
+                matched_text = match.group(0)
+                message = rule['message'].replace('{match}', matched_text)
+                
+                findings.append({
+                    'rule_id': rule['id'],
+                    'category': rule['category'],
+                    'severity': rule['severity'],
+                    'message': message,
+                    'match': matched_text,
+                    'line': line_num,
+                    'column': match.start() + 1,
+                })
+    
+    return findings
+
+
+def find_custom_rules_files(search_paths: Optional[List[str]] = None) -> List[str]:
+    """Find custom rules files in standard locations."""
+    found = []
+    
+    project_rules = Path('.anti-slop/rules.yaml')
+    if project_rules.exists():
+        found.append(str(project_rules))
+    
+    user_rules = Path.home() / '.anti-slop' / 'rules.yaml'
+    if user_rules.exists():
+        found.append(str(user_rules))
+    
+    if search_paths:
+        for path in search_paths:
+            if os.path.exists(path):
+                found.append(path)
+    
+    return found
+
+
+def merge_findings(builtin_findings: List[Dict[str, Any]], 
+                   custom_findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge built-in and custom findings, sorting by line and column."""
+    all_findings = builtin_findings + custom_findings
+    all_findings.sort(key=lambda f: (f.get('line', 0), f.get('column', 0)))
+    return all_findings
