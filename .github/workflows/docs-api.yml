@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
+      - 'tools/**'
       - 'docs/**'
       - '.github/workflows/docs-api.yml'
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
       
       - name: Generate API documentation
         run: |
-          pdoc anti_slop_kit -o docs/api --html
+          pdoc tools -o docs/api --html
           echo "API documentation generated in docs/api/"
       
       - name: Upload documentation artifact
