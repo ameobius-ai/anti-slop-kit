@@ -1,0 +1,45 @@
+# Example custom rules for anti-slop-kit
+# 
+# This file demonstrates how to define custom slop patterns.
+# Place this file at .anti-slop/rules.yaml in your project root
+# or specify it with --rules flag.
+
+name: my-project-rules
+description: Custom rules for my project
+version: 1.0
+
+rules:
+  # Example 1: Avoid corporate jargon
+  - id: avoid-jargon
+    pattern: "synergy|paradigm|leverage|ecosystem"
+    severity: high
+    message: "Avoid corporate jargon: {match}"
+    category: jargon
+
+  # Example 2: Domain-specific terms to avoid
+  - id: domain-terms
+    pattern: "foo|bar|baz|qux"
+    severity: medium
+    message: "Consider more descriptive terms than {match}"
+    category: domain
+
+  # Example 3: Company-specific banned words
+  - id: company-banned
+    pattern: "thingy|stuff|whatever"
+    severity: high
+    message: "Too vague: {match}"
+    category: vague
+
+  # Example 4: Regex pattern for version strings
+  - id: version-format
+    pattern: "\\bv\\d+\\.\\d+\\.\\d+\\b"
+    severity: low
+    message: "Consider using semantic versioning: {match}"
+    category: formatting
+
+  # Example 5: Acronyms to expand
+  - id: expand-acronyms
+    pattern: "\\b(API|SDK|CLI|GUI)\\b"
+    severity: low
+    message: "Consider expanding acronym on first use: {match}"
+    category: clarity
