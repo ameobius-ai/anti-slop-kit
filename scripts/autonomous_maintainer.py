@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "default_branch": None,
 }
 
-CATALOG = [
+CATALOG: List[Dict[str, Any]] = [
     {"key": "docs", "title": "MkDocs documentation site", "paths": ["mkdocs.yml", "docs/index.md", ".github/workflows/docs.yml"]},
     {"key": "devcontainer", "title": "DevContainer / Codespaces environment", "paths": [".devcontainer/devcontainer.json"]},
     {"key": "strict_typing", "title": "Mypy strict type checking workflow", "paths": [".github/workflows/mypy.yml"]},
@@ -50,7 +50,7 @@ def gh_api(method: str, path: str, token: str, payload: Optional[Dict[str, Any]]
     body = None
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
-    last_error = None
+    last_error: Optional[Exception] = None
     for attempt in range(3):
         req = urllib.request.Request(url, data=body, method=method)
         req.add_header("Authorization", f"Bearer {token}")
@@ -248,11 +248,11 @@ def missing_infrastructure(repo: str, token: str, branch: str) -> List[Dict[str,
     for item in CATALOG:
         item_dict = item if isinstance(item, dict) else {}
         required_paths = item_dict.get("paths", [])
-        if any(path not in paths for path in required_paths): missing.append(item); continue
+        if any(path not in paths for path in required_paths): missing.append(item_dict); continue
         contains = item_dict.get("file_contains")
         if not contains: continue
         text = fetch_file_text(repo, token, branch, contains["path"])
-        if text is None or contains["needle"] not in text: missing.append(item)
+        if text is None or contains["needle"] not in text: missing.append(item_dict)
     return missing
 
 def infra_issue_body(item: Dict[str, Any], branch: str) -> str:
