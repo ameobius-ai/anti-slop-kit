@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+fr-ste-lint - anti-slop linter for French technical prose.
+
+Score = violations per 100 words (lower is cleaner).
+Adapted from English ste-lint for French language patterns.
+
+Usage:
+    python3 fr-ste-lint.py draft.md [more.md ...]
+    python3 fr-ste-lint.py --max 5 docs/*.md
+    cat draft.md | python3 fr-ste-lint.py
+    python3 fr-ste-lint.py --json draft.md
+    python3 fr-ste-lint.py --explain draft.md
+
+Exit codes:
+    0 - every file is at or below the threshold
+    1 - at least one file is above the threshold
+    2 - bad arguments or unreadable file
+"""
+import re, sys, json, glob, os
+
+# French-specific slop patterns
+BANNED = [
+    "basiquement", "fondamentalement", "essentiellement",
+    "pratiquement", "littéralement", "actuellement",
+    "simplement", "évidemment", "clairement", "manifestement",
+    "définitivement", "absolument", "totalement", "complètement",
+    "très important", "très bon", "très mauvais", "très grand",
+    "très petit", "très facile", "très difficile", "très simple",
+    "en termes de", "par rapport à", "en ce qui concerne",
+    "il convient de noter", "il est important de noter",
+    "il vaut la peine de mentionner", "sans aucun doute",
+]
+
+MARKETING = [
+    "révolutionnaire", "innovant", "innovante", "disruptif", "disruptive",
+    "transformateur", "transformatrice", "puissant", "puissante",
+    "robuste", "évolutif", "évolutive", "flexible",
+    "intuitif", "intuitive", "fluide", "de pointe",
+    "dernière génération", "état de l'art", "avant-gardiste",
+]
+
+FILLER = [
+    "en fait", "en réalité", "bien sûr", "évidemment",
+    "clairement", "fondamentalement", "essentiellement",
+    "la vérité est que", "le fait est que", "à mon avis",
+    "je pense que", "je crois que", "de mon point de vue",
+]
+
+# Compile patterns
+BANNED_RE = re.compile(r'\b(' + '|'.join(re.escape(w) for w in BANNED) + r')\b', re.IGNORECASE)
+MARKETING_RE = re.compile(r'\b(' + '|'.join(re.escape(w) for w in MARKETING) + r')\b', re.IGNORECASE)
+FILLER_RE = re.compile(r'\b(' + '|'.join(re.escape(w) for w in FILLER) + r')\b', re.IGNORECASE)
+
+def count_words(text):
+    """Count words in French text."""
+    words = re.findall(r'\w+', text, re.UNICODE)
+    return len(words)
+
+def find_violations(text):
+    """Find all violations in text."""
+    violations = []
+    
+    # Check banned words
+    for match in BANNED_RE.finditer(text):
+        violations.append({
+            'type': 'banned',
+            'word': match.group(0),
+            'position': match.start()
+        })
+    
+    # Check marketing words
+    for match in MARKETING_RE.finditer(text):
+        violations.append({
+            'type': 'marketing',
+            'word': match.group(0),
+            'position': match.start()
+        })
+    
+    # Check filler words
+    for match in FILLER_RE.finditer(text):
+        violations.append({
+            'type': 'filler',
+            'word': match.group(0),
+            'position': match.start()
+        })
+    
+    return violations
+
+def lint_file(path):
+    """Lint a single file."""
+    with open(path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    word_count = count_words(text)
+    violations = find_violations(text)
+    
+    score = (len(violations) / word_count * 100) if word_count > 0 else 0
+    
+    return {
+        'path': str(path),
+        'words': word_count,
+        'violations': len(violations),
+        'score': round(score, 2),
+        'findings': violations
+    }
+
+def main():
+    """Main entry point."""
+    if len(sys.argv) < 2:
+        print('Usage: fr-ste-lint.py <file> [files...]', file=sys.stderr)
+        sys.exit(2)
+    
+    files = []
+    max_score = None
+    json_output = False
+    explain = False
+    
+    for arg in sys.argv[1:]:
+        if arg == '--max':
+            continue
+        elif arg == '--json':
+            json_output = True
+        elif arg == '--explain':
+            explain = True
+        elif arg.startswith('--'):
+            continue
+        else:
+            files.extend(glob.glob(arg))
+    
+    if not files:
+        print('No files found', file=sys.stderr)
+        sys.exit(2)
+    
+    results = []
+    for f in files:
+        try:
+            result = lint_file(f)
+            results.append(result)
+        except Exception as e:
+            print(f'Error processing {f}: {e}', file=sys.stderr)
+            sys.exit(2)
+    
+    if json_output:
+        output = {r['path']: r for r in results}
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+    else:
+        for r in results:
+            print(f"{r['path']}: {r['violations']} violations, score {r['score']}")
+            if explain:
+                for v in r['findings']:
+                    print(f"  - {v['type']}: {v['word']}")
+    
+    # Check max score
+    if max_score is not None:
+        for r in results:
+            if r['score'] > max_score:
+                sys.exit(1)
+    
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main()
