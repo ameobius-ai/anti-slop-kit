@@ -524,3 +524,14 @@ If you use anti-slop-kit in your research, please cite:
 ameoblius-ai. (2026). anti-slop-kit: Text Quality Analysis Toolkit.
 https://github.com/ameoblius-ai/anti-slop-kit
 ```
+
+
+## Related Projects
+
+Other tools for improving writing quality:
+
+- **[Write Good](https://github.com/btford/write-good)** - Naive linter for English prose
+- **[Proselint](https://github.com/amperser/proselint)** - Linter for prose
+- **[Hemingway Editor](https://hemingwayapp.com/)** - Writing clarity tool
+- **[Grammarly](https://www.grammarly.com/)** - AI writing assistant
+- **[LanguageTool](https://languagetool.org/)** - Grammar and style checker
