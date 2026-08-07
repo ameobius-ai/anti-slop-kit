@@ -30,8 +30,8 @@ def confidence_interval(
         return (data[0], data[0], data[0])
     
     n = len(data)
-    m = statistics.statistics.mean(data)
-    se = statistics.statistics.stdev(data) / math.sqrt(n)
+    m = statistics.mean(data)
+    se = statistics.stdev(data) / math.sqrt(n)
     
     if n > 30:
         z = 1.96
@@ -99,7 +99,7 @@ def bootstrap_confidence_interval(
     lower_idx = int((1 - confidence) / 2 * n_bootstrap)
     upper_idx = int((1 + confidence) / 2 * n_bootstrap)
     
-    m = statistics.statistics.mean(data)
+    m = statistics.mean(data)
     lower = bootstrap_means[lower_idx]
     upper = bootstrap_means[upper_idx]
     
@@ -109,7 +109,7 @@ def bootstrap_confidence_interval(
 def analyze_condition(
     scores: List[float],
     condition_name: str
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Analyze a single condition's scores."""
     if not scores:
         return {
@@ -140,7 +140,7 @@ def compare_conditions(
     group2: List[float],
     name1: str,
     name2: str
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Compare two conditions statistically."""
     if not group1 or not group2:
         return {
