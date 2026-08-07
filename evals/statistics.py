@@ -5,8 +5,9 @@ Part of issue #23: Enhance eval harness with statistical analysis.
 """
 
 import math
-from typing import List, Tuple, Dict
-from statistics import mean, stdev
+from typing import List, Tuple, Dict, Union, Any
+# Use math for compatibility
+import statistics
 
 
 def confidence_interval(
@@ -29,8 +30,8 @@ def confidence_interval(
         return (data[0], data[0], data[0])
     
     n = len(data)
-    m = mean(data)
-    se = stdev(data) / math.sqrt(n)
+    m = statistics.mean(data)
+    se = statistics.stdev(data) / math.sqrt(n)
     
     if n > 30:
         z = 1.96
@@ -98,7 +99,7 @@ def bootstrap_confidence_interval(
     lower_idx = int((1 - confidence) / 2 * n_bootstrap)
     upper_idx = int((1 + confidence) / 2 * n_bootstrap)
     
-    m = mean(data)
+    m = statistics.mean(data)
     lower = bootstrap_means[lower_idx]
     upper = bootstrap_means[upper_idx]
     
