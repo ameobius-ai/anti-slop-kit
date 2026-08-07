@@ -1,0 +1,131 @@
+{
+  "name": "anti-slop-kit",
+  "displayName": "Anti-Slop Kit",
+  "description": "Detect and remove AI slop from technical prose with deterministic linters",
+  "version": "1.0.0",
+  "publisher": "ameoblius-ai",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Linters",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "anti-slop",
+    "linting",
+    "documentation",
+    "writing",
+    "quality",
+    "AI",
+    "ste100",
+    "controlled-language"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onLanguage:plaintext",
+    "onCommand:antiSlopKit.lintDocument",
+    "onCommand:antiSlopKit.lintSelection"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "antiSlopKit.lintDocument",
+        "title": "Anti-Slop Kit: Lint Current Document"
+      },
+      {
+        "command": "antiSlopKit.lintSelection",
+        "title": "Anti-Slop Kit: Lint Selection"
+      },
+      {
+        "command": "antiSlopKit.showReport",
+        "title": "Anti-Slop Kit: Show Quality Report"
+      }
+    ],
+    "configuration": {
+      "title": "Anti-Slop Kit",
+      "properties": {
+        "antiSlopKit.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable Anti-Slop Kit"
+        },
+        "antiSlopKit.autoLint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically lint documents on save"
+        },
+        "antiSlopKit.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "ru",
+            "es",
+            "fr",
+            "de"
+          ],
+          "default": "auto",
+          "description": "Language for linting (auto-detect or specify)"
+        },
+        "antiSlopKit.maxScore": {
+          "type": "number",
+          "default": 5.0,
+          "description": "Maximum acceptable slop score per 100 words"
+        },
+        "antiSlopKit.customRulesPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to custom rules YAML file"
+        },
+        "antiSlopKit.showDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show diagnostics in Problems panel"
+        },
+        "antiSlopKit.severityLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information"
+          ],
+          "default": "warning",
+          "description": "Severity level for diagnostics"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "markdown",
+        "extensions": [
+          ".md"
+        ],
+        "aliases": [
+          "Markdown"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "echo 'No compilation needed'",
+    "watch": "echo 'No watch needed'",
+    "pretest": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ameoblius-ai/anti-slop-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ameoblius-ai/anti-slop-kit/issues"
+  },
+  "homepage": "https://github.com/ameoblius-ai/anti-slop-kit#readme",
+  "license": "MIT"
+}
