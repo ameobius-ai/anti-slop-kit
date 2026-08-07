@@ -476,3 +476,41 @@ add a banned word or report a false positive.
 ## License
 
 MIT. See `LICENSE`.
+
+
+## Acknowledgments
+
+### Contributors
+
+Thanks to all contributors who have helped improve anti-slop-kit:
+
+- [@ameoblius-ai](https://github.com/ameoblius-ai) - Project creator and maintainer
+- Community contributors - Thank you for your PRs, issues, and feedback!
+
+### Dependencies
+
+anti-slop-kit is built on the shoulders of giants:
+
+- [Python](https://www.python.org/) - Programming language
+- [pytest](https://pytest.org/) - Testing framework
+- [PyYAML](https://pyyaml.org/) - YAML parsing
+- [GitHub Actions](https://github.com/features/actions) - CI/CD platform
+- [mypy](http://mypy-lang.org/) - Static type checker
+- [black](https://black.readthedocs.io/) - Code formatter
+- [isort](https://pycqa.github.io/isort/) - Import sorter
+- [flake8](https://flake8.pycqa.org/) - Linting
+
+### Inspiration
+
+This project was inspired by:
+
+- [Write Good](https://github.com/btford/write-good) - Naive linter for English prose
+- [Hemingway Editor](https://hemingwayapp.com/) - Writing clarity tool
+- [Grammarly](https://www.grammarly.com/) - Writing assistant
+- [Proselint](https://github.com/amperser/proselint/) - Linter for prose
+
+### Special Thanks
+
+- The open source community for amazing tools and libraries
+- Everyone who has reported issues and suggested improvements
+- Technical writers and editors who provided feedback on pattern definitions
