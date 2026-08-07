@@ -6,8 +6,8 @@ Part of issue #23: Enhance eval harness with statistical analysis.
 
 import math
 from typing import List, Tuple, Dict, Union, Any
-# Use math for compatibility
-import statistics
+# Import standard library statistics module (not this file)
+import statistics as stdlib_statistics
 
 
 def confidence_interval(
@@ -30,8 +30,8 @@ def confidence_interval(
         return (data[0], data[0], data[0])
     
     n = len(data)
-    m = statistics.mean(data)
-    se = statistics.stdev(data) / math.sqrt(n)
+    m = stdlib_statistics.mean(data)
+    se = stdlib_statistics.stdev(data) / math.sqrt(n)
     
     if n > 30:
         z = 1.96
@@ -56,8 +56,8 @@ def cohens_d(group1: List[float], group2: List[float]) -> float:
     if not group1 or not group2:
         return 0.0
     
-    m1 = statistics.mean(group1)
-    m2 = statistics.mean(group2)
+    m1 = stdlib_statistics.mean(group1)
+    m2 = stdlib_statistics.mean(group2)
     
     n1 = len(group1)
     n2 = len(group2)
@@ -65,8 +65,8 @@ def cohens_d(group1: List[float], group2: List[float]) -> float:
     if n1 == 1 or n2 == 1:
         return 0.0
     
-    var1 = statistics.stdev(group1) ** 2
-    var2 = statistics.stdev(group2) ** 2
+    var1 = stdlib_statistics.stdev(group1) ** 2
+    var2 = stdlib_statistics.stdev(group2) ** 2
     
     pooled_std = math.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2))
     
@@ -92,14 +92,14 @@ def bootstrap_confidence_interval(
     
     for _ in range(n_bootstrap):
         sample = [random.choice(data) for _ in range(n)]
-        bootstrap_means.append(statistics.mean(sample))
+        bootstrap_means.append(stdlib_statistics.mean(sample))
     
     bootstrap_means.sort()
     
     lower_idx = int((1 - confidence) / 2 * n_bootstrap)
     upper_idx = int((1 + confidence) / 2 * n_bootstrap)
     
-    m = statistics.mean(data)
+    m = stdlib_statistics.mean(data)
     lower = bootstrap_means[lower_idx]
     upper = bootstrap_means[upper_idx]
     
@@ -127,7 +127,7 @@ def analyze_condition(
         "condition": condition_name,
         "n": len(scores),
         "mean": round(m, 4),
-        "std": round(statistics.stdev(scores), 4) if len(scores) > 1 else 0.0,
+        "std": round(stdlib_statistics.stdev(scores), 4) if len(scores) > 1 else 0.0,
         "ci_lower": round(ci_lower, 4),
         "ci_upper": round(ci_upper, 4),
         "min": round(min(scores), 4),
@@ -167,9 +167,9 @@ def compare_conditions(
         "comparison": f"{name1} vs {name2}",
         "n1": len(group1),
         "n2": len(group2),
-        "mean1": round(statistics.mean(group1), 4),
-        "mean2": round(statistics.mean(group2), 4),
-        "mean_diff": round(statistics.mean(group1) - statistics.mean(group2), 4),
+        "mean1": round(stdlib_statistics.mean(group1), 4),
+        "mean2": round(stdlib_statistics.mean(group2), 4),
+        "mean_diff": round(stdlib_statistics.mean(group1) - stdlib_statistics.mean(group2), 4),
         "cohens_d": round(d, 4),
         "effect_size": effect_size,
     }
