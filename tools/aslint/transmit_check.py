@@ -1,33 +1,18 @@
-"""transmit_check: the fidelity primitive for a hop in the channel.
+"""transmit_check: the fidelity primitive for a hop in the channel."""
 
-Given a source text and what arrived after one hop (a human rewrite, a
-robot re-expression, a summarizer), report which bits survived:
-
-- numbers: counts, offsets, versions;
-- identifiers: tokens with an underscore (config keys, function names);
-- urls: every link, stripped of trailing punctuation;
-- constraints: exact strings the caller names via --require;
-- ordering: --order tokens must keep their relative order, by first
-  occurrence in the transmitted text.
-
-Usage:
-    python3 tools/aslint/transmit_check.py SOURCE.md TRANSMITTED.md \
-        [--require "exact string" ...] [--order TOKEN ...]
-
-Exit codes: 0 every check passed, 1 something was lost, 2 bad
-arguments or unreadable input.
-"""
+from __future__ import annotations
 
 import pathlib
 import sys
+from typing import Any
 
-try:  # package import (tests, harness registry) or direct script run
+try:
     from tools.aslint.common import emit, lost_tokens
 except ImportError:
-    from common import emit, lost_tokens
+    from common import emit, lost_tokens  # type: ignore[no-redef]
 
 
-def _ordering_ok(transmitted, tokens):
+def _ordering_ok(transmitted: str, tokens: list[str]) -> bool:
     """True when tokens appear in the given order, by first index."""
     pos = -1
     for tok in tokens:
@@ -38,7 +23,8 @@ def _ordering_ok(transmitted, tokens):
     return True
 
 
-def transmit_check(source, transmitted, constraints=None, ordered=None):
+def transmit_check(source: str, transmitted: str, constraints: list[str] | None = None,
+                   ordered: list[str] | None = None) -> dict[str, Any]:
     """Diff one hop. Returns the tool result dict."""
     constraints = constraints or []
     ordered = ordered or []
@@ -67,10 +53,13 @@ def transmit_check(source, transmitted, constraints=None, ordered=None):
     }
 
 
-def main(argv):
-    files, requires, ordered = [], [], []
+def main(argv: list[str]) -> int:
+    """Main entry point for transmit check tool."""
+    files: list[str] = []
+    requires: list[str] = []
+    ordered: list[str] = []
     i = 0
-    mode = None
+    mode: str | None = None
     while i < len(argv):
         a = argv[i]
         if a == "--require":
