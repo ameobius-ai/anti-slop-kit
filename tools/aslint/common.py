@@ -22,6 +22,7 @@ from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 LINTERS = {
+    "de": KIT_ROOT / "de" / "de-ste-lint.py",
     "en": KIT_ROOT / "en" / "ste-lint.py",
     "ru": KIT_ROOT / "ru" / "ru-ste-lint.py",
 }
