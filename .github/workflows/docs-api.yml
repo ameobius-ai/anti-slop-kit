@@ -35,7 +35,7 @@ jobs:
       
       - name: Generate API documentation
         run: |
-          python -m pdoc tools -o docs/api --html
+          python -m pdoc tools -o docs/api
           echo "API documentation generated in docs/api/"
       
       - name: Upload documentation artifact
