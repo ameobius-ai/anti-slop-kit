@@ -73,7 +73,7 @@ def gh_api(method: str, path: str, token: str, payload: Optional[Dict[str, Any]]
                 time.sleep(5 * (attempt + 1)); continue
             raise last_error
         except Exception as exc:
-            last_error: Optional[Exception] = exc
+            last_error = exc
             if attempt == 2: raise
             time.sleep(2 ** attempt)
     if last_error is not None: raise last_error
@@ -244,7 +244,7 @@ def missing_infrastructure(repo: str, token: str, branch: str) -> List[Dict[str,
     paths = set()
     for item in tree.get("tree", []):
         if item.get("type") == "blob": paths.add(item.get("path"))
-    missing = []
+    missing: List[Dict[str, Any]] = []
     for item in CATALOG:
         item_dict = item if isinstance(item, dict) else {}
         required_paths = item_dict.get("paths", [])
@@ -308,8 +308,9 @@ def main() -> int:
     ensure_labels(repo, token)
     repo_info = gh_api("GET", f"repos/{repo}", token)
     branch = cfg.get("default_branch") or repo_info.get("default_branch") or "main"
-    open_items = gh_api("GET", f"repos/{repo}/issues?state=open&per_page=100", token)
+    open_items: Any = gh_api("GET", f"repos/{repo}/issues?state=open&per_page=100", token)
     if not isinstance(open_items, list): open_items = []
+    else: open_items = list(open_items)
     open_issues: List[Dict[str, Any]] = [item for item in open_items if isinstance(item, dict) and "pull_request" not in item]
     pr_rows = []
     for pr_number in cfg.get("target_pulls", []):
