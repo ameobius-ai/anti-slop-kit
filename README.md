@@ -514,3 +514,13 @@ This project was inspired by:
 - The open source community for amazing tools and libraries
 - Everyone who has reported issues and suggested improvements
 - Technical writers and editors who provided feedback on pattern definitions
+
+
+## Citation
+
+If you use anti-slop-kit in your research, please cite:
+
+```
+ameoblius-ai. (2026). anti-slop-kit: Text Quality Analysis Toolkit.
+https://github.com/ameoblius-ai/anti-slop-kit
+```
