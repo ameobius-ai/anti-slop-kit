@@ -1,144 +1,159 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Integration tests: end-to-end workflows through the real entry points.
+
+Replaces the original scaffolding, whose TODOs referenced an
+`anti_slop_kit` package that never existed in this repo (#247).
+Everything below drives the actual linters and wrapper tools.
 """
-Integration tests for anti-slop-kit workflows.
-
-These tests verify complete user workflows and end-to-end functionality.
-
-NOTE: this file is scaffolding with placeholder bodies (see the TODOs).
-It is kept in unittest form so scripts/check.sh collects it; filling the
-placeholders or deleting the file is a separate decision.
-"""
-
-import tempfile
+import contextlib
+import importlib.util
+import io
+import json
 import os
+import pathlib
+import tempfile
 import unittest
-from pathlib import Path
+
+from tools.aslint import custom_rules, rewrite_tool
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-class TestIntegrationCLI(unittest.TestCase):
-    """Integration tests for command-line interface."""
+def load(relpath, name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relpath)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
-    def test_integration_cli_analyze_single_file(self):
-        """Test CLI analysis of a single file."""
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
-            f.write("This is a test document with some content.")
-            temp_file = f.name
 
+en = load("en/ste-lint.py", "ste_lint")
+
+CLEAN_EN = "The parser reads the file. It writes a report.\n"
+SLOP_EN = "You can utilize this seamless, world-class tool.\n"
+
+
+def call_main(mod, argv):
+    """Run main() like a CLI call. Returns (exit code, stdout, stderr)."""
+    buf, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+        code = mod.main(argv)
+    return code, buf.getvalue(), err.getvalue()
+
+
+class WithTmpDir(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp_path = pathlib.Path(self._tmp.name)
+
+    def write(self, name, text):
+        path = self.tmp_path / name
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+
+class TestEnCliEndToEnd(WithTmpDir):
+    """The en linter CLI: files in, verdict out, exit codes honored."""
+
+    def test_clean_file_exits_zero(self):
+        path = self.write("clean.md", CLEAN_EN)
+        code, out, _ = call_main(en, [path])
+        self.assertEqual(code, 0)
+        self.assertIn("clean.md", out)
+
+    def test_json_payload_shape(self):
+        path = self.write("slop.md", SLOP_EN)
+        code, out, _ = call_main(en, ["--json", path])
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        self.assertEqual(list(payload), [path])
+        result = payload[path]
+        self.assertGreaterEqual(result["violations"]["banned_word"], 1)
+        self.assertIn("total_per100w", result)
+
+    def test_max_gate_blocks_slop(self):
+        path = self.write("slop.md", SLOP_EN)
+        code, _, err = call_main(en, ["--max", "0", path])
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL", err)
+
+    def test_max_gate_passes_clean_file(self):
+        path = self.write("clean.md", CLEAN_EN)
+        code, _, _ = call_main(en, ["--max", "0", path])
+        self.assertEqual(code, 0)
+
+    def test_unreadable_file_exits_two(self):
+        missing = str(self.tmp_path / "missing.md")
+        code, _, err = call_main(en, [missing])
+        self.assertEqual(code, 2)
+        self.assertIn("ERROR", err)
+
+    def test_unknown_option_exits_two(self):
+        code, _, err = call_main(en, ["--nope"])
+        self.assertEqual(code, 2)
+        self.assertIn("ERROR", err)
+
+
+class TestCustomRulesWorkflow(WithTmpDir):
+    """The .anti-slop/rules.yaml project-rules workflow, end to end."""
+
+    RULES_YAML = (
+        "name: project-rules\n"
+        "rules:\n"
+        "  - id: no-foo\n"
+        '    pattern: "foo"\n'
+        "    severity: high\n"
+        '    message: "Found foo"\n'
+    )
+
+    def test_find_load_apply_in_project_dir(self):
+        rules_dir = self.tmp_path / ".anti-slop"
+        rules_dir.mkdir()
+        (rules_dir / "rules.yaml").write_text(self.RULES_YAML, encoding="utf-8")
+
+        cwd = os.getcwd()
+        os.chdir(self.tmp_path)
         try:
-            # TODO: Import and test CLI
-            # from anti_slop_kit.cli import main
-            # result = main(["analyze", temp_file])
-            # assert result == 0
-            self.assertTrue(True)  # Placeholder
+            found = custom_rules.find_custom_rules_files()
         finally:
-            os.unlink(temp_file)
+            os.chdir(cwd)
 
-    def test_integration_cli_batch_processing(self):
-        """Test CLI batch processing of multiple files."""
-        # Create temporary directory with multiple files
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for i in range(3):
-                Path(tmpdir, f"file{i}.md").write_text(f"Content {i}")
+        self.assertIn(".anti-slop/rules.yaml", found)
 
-            # TODO: Import and test CLI
-            # from anti_slop_kit.cli import main
-            # result = main(["analyze", tmpdir])
-            # assert result == 0
-            self.assertTrue(True)  # Placeholder
+        rules = custom_rules.load_custom_rules([str(rules_dir / "rules.yaml")])
+        self.assertEqual([r["id"] for r in rules], ["no-foo"])
+
+        findings = custom_rules.apply_custom_rules("bar\nfoo bar\n", rules)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["rule_id"], "no-foo")
+        self.assertEqual(findings[0]["line"], 2)
 
 
-class TestIntegrationConfiguration(unittest.TestCase):
-    """Integration tests for configuration loading."""
+class TestValidateRewriteWorkflow(unittest.TestCase):
+    """validate_rewrite: accept improvements, reject fidelity loss."""
 
-    def test_integration_config_loading(self):
-        """Test loading configuration from .anti-slop.yaml."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir, ".anti-slop.yaml")
-            config_file.write_text("strictness: high\nthreshold: 90")
+    def test_improvement_is_accepted(self):
+        original = "You can utilize this seamless, world-class tool.\n"
+        rewrite = "You can use this tool.\n"
+        result = rewrite_tool.validate_rewrite(original, rewrite, "en")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["verdict"], "accept")
+        self.assertLess(result["score"]["rewrite_per100w"],
+                        result["score"]["original_per100w"])
 
-            # TODO: Import and test config loading
-            # from anti_slop_kit import load_config
-            # config = load_config(tmpdir)
-            # assert config.strictness == "high"
-            # assert config.threshold == 90
-            self.assertTrue(True)  # Placeholder
+    def test_lost_number_is_rejected(self):
+        original = "Version 2.0 reads the config_key.\n"
+        rewrite = "Version 3.0 reads the config_key.\n"
+        result = rewrite_tool.validate_rewrite(original, rewrite, "en")
+        self.assertEqual(result["verdict"], "reject")
+        self.assertIn("2.0", result["fidelity"]["numbers"])
+        self.assertTrue(any("numbers" in r for r in result["reasons"]))
 
-    def test_integration_config_with_exclusions(self):
-        """Test configuration with exclusion patterns."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir, ".anti-slop.yaml")
-            config_content = """
-strictness: medium
-exclude:
-  - tests/
-  - docs/
-  - "*.min.js"
-"""
-            config_file.write_text(config_content)
-
-            # TODO: Import and test config loading
-            # from anti_slop_kit import load_config
-            # config = load_config(tmpdir)
-            # assert len(config.exclude) == 3
-            self.assertTrue(True)  # Placeholder
-
-
-class TestIntegrationWorkflows(unittest.TestCase):
-    """Integration tests for complete analysis workflows."""
-
-    def test_integration_full_analysis_workflow(self):
-        """Test complete analysis workflow from text to results."""
-        text = """
-        This is a sample document. I think it is very good.
-        In my opinion, it works really well.
-        """
-
-        # TODO: Import and test full workflow
-        # from anti_slop_kit import analyze_text
-        # result = analyze_text(text)
-        # assert result.score >= 0
-        # assert result.score <= 100
-        # assert isinstance(result.findings, list)
-        self.assertTrue(True)  # Placeholder
-
-    def test_integration_batch_workflow(self):
-        """Test batch analysis workflow."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create multiple test files
-            for i in range(5):
-                Path(tmpdir, f"doc{i}.txt").write_text(f"Document {i} content")
-
-            # TODO: Import and test batch workflow
-            # from anti_slop_kit import batch_analyze
-            # results = batch_analyze(list(Path(tmpdir).glob("*.txt")))
-            # assert len(results) == 5
-            # assert all(r.score >= 0 for r in results)
-            self.assertTrue(True)  # Placeholder
-
-
-class TestIntegrationPatterns(unittest.TestCase):
-    """Integration tests for pattern detection."""
-
-    def test_integration_pattern_detection_workflow(self):
-        """Test complete pattern detection workflow."""
-        # TODO: Import and test pattern detection
-        # from anti_slop_kit import PatternMatcher
-        # matcher = PatternMatcher()
-        # text = "This is very very good"
-        # findings = matcher.find_all(text)
-        # assert len(findings) > 0
-        self.assertTrue(True)  # Placeholder
-
-    def test_integration_custom_pattern_workflow(self):
-        """Test adding and using custom patterns."""
-        # TODO: Import and test custom pattern workflow
-        # from anti_slop_kit import AntiSlopAnalyzer, CustomPattern
-        # analyzer = AntiSlopAnalyzer()
-        # custom = CustomPattern(name="test", regex=r"test", message="test")
-        # analyzer.add_pattern(custom)
-        # result = analyzer.analyze("test text")
-        # assert result is not None
-        self.assertTrue(True)  # Placeholder
+    def test_lang_autodetect_routes_cyrillic_to_ru(self):
+        result = rewrite_tool.validate_rewrite(
+            "Сервер читает файл.\n", "Сервер читает файл.\n")
+        self.assertEqual(result["lang"], "ru")
 
 
 if __name__ == "__main__":
