@@ -875,7 +875,6 @@ class CodeCommentAnalyzer:
             (r'//\s*инкремент\s*(счётчик\w*|счетчик\w*|переменн\w*|i|j|k)\s*$', 'очевидно: инкремент'),
             (r'//\s*вернуть\s*(значение\w*|результат\w*)\s*$', 'очевидно: вернуть'),
         ]
-        
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             for pattern, desc in obvious_patterns:
