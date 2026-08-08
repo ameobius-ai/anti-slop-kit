@@ -49,13 +49,53 @@ def lint(text):
         "longest_sentence": max(len(s.split()) for s in sentences) if sentences else 0
     }
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Uso: python3 es-ste-lint.py archivo.md", file=sys.stderr)
-        sys.exit(2)
-    
-    for filename in sys.argv[1:]:
-        with open(filename, 'r', encoding='utf-8') as f:
-            text = f.read()
+def main(argv):
+    max_score = None
+    files = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--max":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --max needs a number", file=sys.stderr)
+                return 2
+            try:
+                max_score = float(argv[i])
+            except ValueError:
+                print("ERROR: --max needs a number", file=sys.stderr)
+                return 2
+        elif a.startswith("--max="):
+            try:
+                max_score = float(a.split("=", 1)[1])
+            except ValueError:
+                print("ERROR: --max needs a number", file=sys.stderr)
+                return 2
+        elif a.startswith("--"):
+            print(f"ERROR: unknown option {a}", file=sys.stderr)
+            return 2
+        else:
+            files.append(a)
+        i += 1
+    if not files:
+        print("Uso: python3 es-ste-lint.py [--max N] archivo.md [más.md ...]", file=sys.stderr)
+        return 2
+    failed = 0
+    for filename in files:
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except OSError as exc:
+            print(f"ERROR {filename}: {exc}", file=sys.stderr)
+            return 2
         result = lint(text)
         print(f"{filename:30} words={result['words']:5d} total={result['total']:4d} per100w={result['total_per100w']:6.2f}")
+        if max_score is not None and result["total_per100w"] > max_score:
+            print(f"FAIL {filename}: {result['total_per100w']:.2f} per 100 words "
+                  f"is above the limit of {max_score:.2f}", file=sys.stderr)
+            failed += 1
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
