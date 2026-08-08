@@ -885,7 +885,6 @@ class CodeCommentAnalyzer:
             r'//\s*TODO\b',
             r'//\s*FIXME\b',
         ]
-        
         for i, line in enumerate(lines, 1):
             for pattern in todo_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
@@ -903,7 +902,6 @@ class CodeCommentAnalyzer:
             r'//\s*(эта\s+)?(функция|метод|цикл)\s+(делает|возвращает|проверяет)',
             r'//\s*(эта\s+)?(переменн|поле)\s+(содержит|хранит)',
         ]
-        
         for i, line in enumerate(lines, 1):
             for pattern in what_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
