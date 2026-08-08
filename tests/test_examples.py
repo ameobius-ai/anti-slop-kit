@@ -56,7 +56,11 @@ def score(path):
 def pair_dirs():
     if not EXAMPLES.is_dir():
         return []
-    return sorted(p for p in EXAMPLES.iterdir() if p.is_dir())
+    # Only en-*/ru-* dirs are before/after pairs; the tool demos
+    # (basic-lint, custom-rules, rewrite-validation, transmit-check)
+    # are not, and the walk must not claim them (#256).
+    return sorted(p for p in EXAMPLES.iterdir()
+                  if p.is_dir() and p.name.startswith(("en-", "ru-")))
 
 
 class GalleryLayout(unittest.TestCase):
