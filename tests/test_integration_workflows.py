@@ -2,15 +2,19 @@
 Integration tests for anti-slop-kit workflows.
 
 These tests verify complete user workflows and end-to-end functionality.
+
+NOTE: this file is scaffolding with placeholder bodies (see the TODOs).
+It is kept in unittest form so scripts/check.sh collects it; filling the
+placeholders or deleting the file is a separate decision.
 """
 
-import pytest
 import tempfile
 import os
+import unittest
 from pathlib import Path
 
 
-class TestIntegrationCLI:
+class TestIntegrationCLI(unittest.TestCase):
     """Integration tests for command-line interface."""
 
     def test_integration_cli_analyze_single_file(self):
@@ -25,7 +29,7 @@ class TestIntegrationCLI:
             # from anti_slop_kit.cli import main
             # result = main(["analyze", temp_file])
             # assert result == 0
-            assert True  # Placeholder
+            self.assertTrue(True)  # Placeholder
         finally:
             os.unlink(temp_file)
 
@@ -40,10 +44,10 @@ class TestIntegrationCLI:
             # from anti_slop_kit.cli import main
             # result = main(["analyze", tmpdir])
             # assert result == 0
-            assert True  # Placeholder
+            self.assertTrue(True)  # Placeholder
 
 
-class TestIntegrationConfiguration:
+class TestIntegrationConfiguration(unittest.TestCase):
     """Integration tests for configuration loading."""
 
     def test_integration_config_loading(self):
@@ -57,7 +61,7 @@ class TestIntegrationConfiguration:
             # config = load_config(tmpdir)
             # assert config.strictness == "high"
             # assert config.threshold == 90
-            assert True  # Placeholder
+            self.assertTrue(True)  # Placeholder
 
     def test_integration_config_with_exclusions(self):
         """Test configuration with exclusion patterns."""
@@ -76,10 +80,10 @@ exclude:
             # from anti_slop_kit import load_config
             # config = load_config(tmpdir)
             # assert len(config.exclude) == 3
-            assert True  # Placeholder
+            self.assertTrue(True)  # Placeholder
 
 
-class TestIntegrationWorkflows:
+class TestIntegrationWorkflows(unittest.TestCase):
     """Integration tests for complete analysis workflows."""
 
     def test_integration_full_analysis_workflow(self):
@@ -95,7 +99,7 @@ class TestIntegrationWorkflows:
         # assert result.score >= 0
         # assert result.score <= 100
         # assert isinstance(result.findings, list)
-        assert True  # Placeholder
+        self.assertTrue(True)  # Placeholder
 
     def test_integration_batch_workflow(self):
         """Test batch analysis workflow."""
@@ -109,10 +113,10 @@ class TestIntegrationWorkflows:
             # results = batch_analyze(list(Path(tmpdir).glob("*.txt")))
             # assert len(results) == 5
             # assert all(r.score >= 0 for r in results)
-            assert True  # Placeholder
+            self.assertTrue(True)  # Placeholder
 
 
-class TestIntegrationPatterns:
+class TestIntegrationPatterns(unittest.TestCase):
     """Integration tests for pattern detection."""
 
     def test_integration_pattern_detection_workflow(self):
@@ -123,7 +127,7 @@ class TestIntegrationPatterns:
         # text = "This is very very good"
         # findings = matcher.find_all(text)
         # assert len(findings) > 0
-        assert True  # Placeholder
+        self.assertTrue(True)  # Placeholder
 
     def test_integration_custom_pattern_workflow(self):
         """Test adding and using custom patterns."""
@@ -134,8 +138,8 @@ class TestIntegrationPatterns:
         # analyzer.add_pattern(custom)
         # result = analyzer.analyze("test text")
         # assert result is not None
-        assert True  # Placeholder
+        self.assertTrue(True)  # Placeholder
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()
