@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Gate tests for --max in the de/fr/en/ru linters (issues #241, #246).
+"""Gate tests for --max in all five linters (issues #241, #246, #250).
 
 de/fr accepted --max but never parsed its value, so the threshold never
 fired and every run exited 0 (#241). en/ru parsed it but crashed with
-ValueError on a non-numeric value (#246). These tests are unittest-style,
-so the standard gate (scripts/check.sh) actually runs them.
+ValueError on a non-numeric value (#246). es had no --max parsing and no
+main(argv) at all (#250). These tests are unittest-style, so the standard
+gate (scripts/check.sh) actually runs them.
 """
 import contextlib
 import importlib.util
@@ -28,6 +29,7 @@ de = load("de/de-ste-lint.py", "de_ste_lint")
 fr = load("fr/fr-ste-lint.py", "fr_ste_lint")
 en = load("en/ste-lint.py", "ste_lint")
 ru = load("ru/ru-ste-lint.py", "ru_ste_lint")
+es = load("es/es-ste-lint.py", "es_ste_lint")
 
 SLOP = {
     "de": "Dieses System ist grundsätzlich sehr wichtig, revolutionär und nahtlos robust.\n",
@@ -37,6 +39,9 @@ CLEAN = {
     "de": "Der Server startet den Dienst nach einem Neustart.\n",
     "fr": "Le serveur démarre le service après un redémarrage.\n",
 }
+
+SLOP_ES = "Esta solución innovadora y revolucionaria es muy robusta.\n"
+CLEAN_ES = "El servidor inicia el servicio después del reinicio.\n"
 
 
 def call(mod, argv):
@@ -132,6 +137,57 @@ class MaxGateEnRu(unittest.TestCase):
             code, _, err = call_return(mod, ["--max"])
             self.assertEqual(code, 2, lang)
             self.assertIn("--max", err, lang)
+
+
+class MaxGateEs(unittest.TestCase):
+    """es gets the same --max gate as the other four linters (#250)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, name, text):
+        path = pathlib.Path(self.tmp.name) / name
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    def test_slop_fails_at_max_zero(self):
+        path = self.write("slop.md", SLOP_ES)
+        code, _, _ = call_return(es, ["--max", "0", path])
+        self.assertEqual(code, 1)
+
+    def test_slop_passes_above_its_score(self):
+        path = self.write("slop.md", SLOP_ES)
+        code, _, _ = call_return(es, ["--max", "100", path])
+        self.assertEqual(code, 0)
+
+    def test_max_equals_syntax(self):
+        path = self.write("slop.md", SLOP_ES)
+        code, _, _ = call_return(es, ["--max=0", path])
+        self.assertEqual(code, 1)
+
+    def test_clean_text_passes_at_max_zero(self):
+        path = self.write("clean.md", CLEAN_ES)
+        code, _, _ = call_return(es, ["--max", "0", path])
+        self.assertEqual(code, 0)
+
+    def test_missing_value_is_usage_error(self):
+        code, _, err = call_return(es, ["--max"])
+        self.assertEqual(code, 2)
+        self.assertIn("--max", err)
+
+    def test_nonnumeric_value_is_usage_error(self):
+        code, _, err = call_return(es, ["--max", "abc", "x.md"])
+        self.assertEqual(code, 2)
+        self.assertIn("--max", err)
+
+    def test_unreadable_file_is_error_not_traceback(self):
+        missing = str(pathlib.Path(self.tmp.name) / "missing.md")
+        code, _, err = call_return(es, [missing])
+        self.assertEqual(code, 2)
+        self.assertIn("ERROR", err)
 
 
 if __name__ == "__main__":
