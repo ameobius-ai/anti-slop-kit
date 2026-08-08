@@ -69,12 +69,14 @@ def lint(text):
     }
 
 def main(argv):
-    max_score = None
+    as_json, max_score = False, None
     files = []
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a == "--max":
+        if a == "--json":
+            as_json = True
+        elif a == "--max":
             i += 1
             if i >= len(argv):
                 print("ERROR: --max needs a number", file=sys.stderr)
@@ -97,9 +99,10 @@ def main(argv):
             files.append(a)
         i += 1
     if not files:
-        print("Uso: python3 es-ste-lint.py [--max N] archivo.md [más.md ...]", file=sys.stderr)
+        print("Uso: python3 es-ste-lint.py [--json] [--max N] archivo.md [más.md ...]", file=sys.stderr)
         return 2
     failed = 0
+    results = {}
     for filename in files:
         try:
             with open(filename, 'r', encoding='utf-8') as f:
@@ -108,11 +111,16 @@ def main(argv):
             print(f"ERROR {filename}: {exc}", file=sys.stderr)
             return 2
         result = lint(text)
-        print(f"{filename:30} words={result['words']:5d} total={result['total']:4d} per100w={result['total_per100w']:6.2f}")
+        if as_json:
+            results[filename] = result
+        else:
+            print(f"{filename:30} words={result['words']:5d} total={result['total']:4d} per100w={result['total_per100w']:6.2f}")
         if max_score is not None and result["total_per100w"] > max_score:
             print(f"FAIL {filename}: {result['total_per100w']:.2f} per 100 words "
                   f"is above the limit of {max_score:.2f}", file=sys.stderr)
             failed += 1
+    if as_json:
+        print(json.dumps(results, ensure_ascii=False, indent=2))
     return 1 if failed else 0
 
 

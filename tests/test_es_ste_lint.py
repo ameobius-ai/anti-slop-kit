@@ -9,6 +9,7 @@ technical-register allowlist from issue #253 at rule level.
 import contextlib
 import importlib.util
 import io
+import json
 import pathlib
 import tempfile
 import unittest
@@ -102,6 +103,42 @@ class TestTechnicalRegister(unittest.TestCase):
     def test_the_clean_sample_passes_the_gate(self):
         text = (ROOT / "es/samples/skill.md").read_text(encoding="utf-8")
         self.assertLessEqual(es_ste_lint.lint(text)["total_per100w"], 2)
+
+
+class TestJsonOutput(WithTmpDir):
+    """--json emits one parseable object keyed by path (#252)."""
+
+    def test_json_output_parseable_and_keyed_by_path(self):
+        path = self.write("clean.md", "El servidor inicia el servicio.\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = es_ste_lint.main(["--json", path])
+        self.assertEqual(code, 0)
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(list(payload), [path])
+        self.assertIn("violations", payload[path])
+        self.assertIn("total_per100w", payload[path])
+
+    def test_json_with_max_gate_still_fails_above(self):
+        path = self.write(
+            "slop.md",
+            "Esta solución innovadora y revolucionaria es muy robusta.\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = es_ste_lint.main(["--json", "--max", "0", path])
+        self.assertEqual(code, 1)
+        json.loads(buf.getvalue())  # the output stays parseable
+
+    def test_default_text_line_unchanged(self):
+        path = self.write("clean.md", "El servidor inicia el servicio.\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = es_ste_lint.main([path])
+        self.assertEqual(code, 0)
+        out = buf.getvalue()
+        self.assertIn("words=", out)
+        self.assertIn("per100w=", out)
+        self.assertNotIn("{", out)  # the default lane carries no JSON
 
 
 if __name__ == "__main__":
