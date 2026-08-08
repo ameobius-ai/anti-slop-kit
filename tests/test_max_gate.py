@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Gate tests for --max in the de/fr linters (issue #241).
+"""Gate tests for --max in the de/fr/en/ru linters (issues #241, #246).
 
-Both linters accepted --max but never parsed its value, so the threshold
-never fired and every run exited 0. These tests are unittest-style, so the
-standard gate (scripts/check.sh) actually runs them.
+de/fr accepted --max but never parsed its value, so the threshold never
+fired and every run exited 0 (#241). en/ru parsed it but crashed with
+ValueError on a non-numeric value (#246). These tests are unittest-style,
+so the standard gate (scripts/check.sh) actually runs them.
 """
 import contextlib
 import importlib.util
@@ -25,6 +26,8 @@ def load(relpath, name):
 
 de = load("de/de-ste-lint.py", "de_ste_lint")
 fr = load("fr/fr-ste-lint.py", "fr_ste_lint")
+en = load("en/ste-lint.py", "ste_lint")
+ru = load("ru/ru-ste-lint.py", "ru_ste_lint")
 
 SLOP = {
     "de": "Dieses System ist grundsätzlich sehr wichtig, revolutionär und nahtlos robust.\n",
@@ -45,6 +48,14 @@ def call(mod, argv):
             mod.main(argv)
         except SystemExit as exc:
             code = exc.code
+    return code, buf.getvalue(), err.getvalue()
+
+
+def call_return(mod, argv):
+    """Run main() like a CLI call, taking the exit code from its return."""
+    buf, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+        code = mod.main(argv)
     return code, buf.getvalue(), err.getvalue()
 
 
@@ -99,6 +110,28 @@ class MaxGateDeFr(unittest.TestCase):
             code, out, _ = call(mod, ["--max", "0", path])
             self.assertIn("slop.md", out, lang)
             self.assertEqual(code, 1, lang)
+
+
+class MaxGateEnRu(unittest.TestCase):
+    """en/ru must reject a non-numeric --max value instead of crashing (#246)."""
+
+    def test_nonnumeric_value_is_usage_error(self):
+        for mod, lang in ((en, "en"), (ru, "ru")):
+            code, _, err = call_return(mod, ["--max", "abc", "x.md"])
+            self.assertEqual(code, 2, lang)
+            self.assertIn("--max", err, lang)
+
+    def test_nonnumeric_equals_syntax_is_usage_error(self):
+        for mod, lang in ((en, "en"), (ru, "ru")):
+            code, _, err = call_return(mod, ["--max=abc", "x.md"])
+            self.assertEqual(code, 2, lang)
+            self.assertIn("--max", err, lang)
+
+    def test_missing_value_is_usage_error(self):
+        for mod, lang in ((en, "en"), (ru, "ru")):
+            code, _, err = call_return(mod, ["--max"])
+            self.assertEqual(code, 2, lang)
+            self.assertIn("--max", err, lang)
 
 
 if __name__ == "__main__":
