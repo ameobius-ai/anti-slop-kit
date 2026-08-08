@@ -20,7 +20,7 @@ requirements*.txt", python-version: "${{ matrix.python-version }}"}
         run: |
           pip install -e '.[dev]' || pip install pytest || true
       - name: Run tests
-        run: pytest tests/ || echo "Tests completed"
+        run: bash scripts/check.sh tests
   security:
     name: security scan
     runs-on: ubuntu-latest
@@ -44,13 +44,13 @@ requirements*.txt", python-version: "${{ matrix.python-version }}"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.13"}
+        with: {python-version: '3.13'}
       - name: Install package
         run: pip install -e . || true
       - name: Run lint checks
         run: |
           if [ -f scripts/check.sh ]; then
-            bash scripts/check.sh lint || echo "Lint check completed"
+            bash scripts/check.sh lint
           else
             echo "No check.sh found, skipping"
           fi
