@@ -106,9 +106,11 @@ def lint_file(path):
         'findings': violations
     }
 
-def main():
+def main(argv=None):
     """Main entry point."""
-    if len(sys.argv) < 2:
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
         print('Usage: fr-ste-lint.py <file> [files...]', file=sys.stderr)
         sys.exit(2)
     
@@ -117,9 +119,25 @@ def main():
     json_output = False
     explain = False
     
-    for arg in sys.argv[1:]:
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
         if arg == '--max':
-            continue
+            i += 1
+            if i >= len(argv):
+                print('Error: --max needs a number', file=sys.stderr)
+                sys.exit(2)
+            try:
+                max_score = float(argv[i])
+            except ValueError:
+                print('Error: --max needs a number', file=sys.stderr)
+                sys.exit(2)
+        elif arg.startswith('--max='):
+            try:
+                max_score = float(arg.split('=', 1)[1])
+            except ValueError:
+                print('Error: --max needs a number', file=sys.stderr)
+                sys.exit(2)
         elif arg == '--json':
             json_output = True
         elif arg == '--explain':
@@ -128,6 +146,7 @@ def main():
             continue
         else:
             files.extend(glob.glob(arg))
+        i += 1
     
     if not files:
         print('No files found', file=sys.stderr)
