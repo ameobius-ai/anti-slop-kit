@@ -51,9 +51,14 @@ if [ "$target" != tests ]; then
 	step 'the clean Russian sample must stay clean'
 	"$python_bin" ru/ru-ste-lint.py ${format_args[@]+"${format_args[@]}"} --max 2 ru/samples/utr.md
 
+	# no format_args on this line: es has no --format flag yet (#252)
+	step 'the clean Spanish sample must stay clean'
+	"$python_bin" es/es-ste-lint.py --max 2 es/samples/skill.md
+
 	step 'baseline scores, for the log'
 	"$python_bin" en/ste-lint.py en/samples/baseline.md
 	"$python_bin" ru/ru-ste-lint.py ru/samples/baseline.md
+	"$python_bin" es/es-ste-lint.py es/samples/baseline.md
 fi
 
 printf '\nAll checks passed.\n'
