@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import json
 import pathlib
 import unittest
@@ -14,6 +16,7 @@ def load(relpath, name):
 
 
 en = load("en/ste-lint.py", "ste_lint")
+ru = load("ru/ru-ste-lint.py", "ru_ste_lint")
 format_sarif = en.format_sarif
 lint = en.lint
 
@@ -167,6 +170,37 @@ fast-paced world.
         # Should have no results
         results = sarif["runs"][0]["results"]
         self.assertEqual(len(results), 0)
+
+class TestSARIFCommandLine(unittest.TestCase):
+    """--format sarif must reach report() through the CLI parser."""
+
+    def call(self, mod, argv):
+        buf = io.StringIO()
+        err = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            code = mod.main(argv)
+        return code, buf.getvalue(), err.getvalue()
+
+    def test_en_cli_accepts_sarif(self):
+        code, out, _ = self.call(en, ["--format", "sarif", str(ROOT / "en/samples/ste.md")])
+        self.assertEqual(code, 0)
+        self.assertIn('"version": "2.1.0"', out)
+
+    def test_en_cli_accepts_sarif_equals_syntax(self):
+        code, out, _ = self.call(en, ["--format=sarif", str(ROOT / "en/samples/ste.md")])
+        self.assertEqual(code, 0)
+        self.assertIn('"version": "2.1.0"', out)
+
+    def test_ru_cli_accepts_sarif(self):
+        code, out, _ = self.call(ru, ["--format", "sarif", str(ROOT / "ru/samples/utr.md")])
+        self.assertEqual(code, 0)
+        self.assertIn('"version": "2.1.0"', out)
+
+    def test_unknown_format_still_rejected(self):
+        code, _, err = self.call(en, ["--format", "bogus", str(ROOT / "en/samples/ste.md")])
+        self.assertEqual(code, 2)
+        self.assertIn("ERROR", err)
+
 
 if __name__ == '__main__':
     unittest.main()

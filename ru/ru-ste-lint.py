@@ -661,13 +661,13 @@ def main(argv):
             explain = True
         elif a == "--format":
             i += 1
-            if i >= len(argv) or argv[i] not in ("text", "github"):
-                print("ERROR: --format needs text or github", file=sys.stderr)
+            if i >= len(argv) or argv[i] not in ("text", "github", "sarif"):
+                print("ERROR: --format needs text, github, or sarif", file=sys.stderr)
                 return 2
             fmt = argv[i]
         elif a.startswith("--format="):
             fmt = a.split("=", 1)[1]
-            if fmt not in ("text", "github"):
+            if fmt not in ("text", "github", "sarif"):
                 print(f"ERROR: unknown format {fmt}", file=sys.stderr)
                 return 2
         elif a == "--breakdown":
