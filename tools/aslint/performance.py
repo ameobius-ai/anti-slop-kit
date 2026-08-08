@@ -79,6 +79,8 @@ def parallel_lint_files(
     Returns:
         Dictionary mapping file paths to linting results
     """
+    if not file_paths:
+        return {}
     if max_workers is None:
         max_workers = min(cpu_count(), len(file_paths))
     

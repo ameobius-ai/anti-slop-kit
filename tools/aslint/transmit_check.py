@@ -59,13 +59,18 @@ def main(argv: list[str]) -> int:
     requires: list[str] = []
     ordered: list[str] = []
     i = 0
-    mode: str | None = None
     while i < len(argv):
         a = argv[i]
-        if a == "--require":
-            mode = "require"
-        elif a == "--order":
-            mode = "order"
+        if a in ("--require", "--order"):
+            i += 1
+            if i >= len(argv):
+                emit({"ok": False, "tool": "transmit_check",
+                      "error": f"{a} needs a value"})
+                return 2
+            if a == "--require":
+                requires.append(argv[i])
+            else:
+                ordered.append(argv[i])
         elif a in ("-h", "--help"):
             print(__doc__)
             return 0
@@ -73,10 +78,6 @@ def main(argv: list[str]) -> int:
             emit({"ok": False, "tool": "transmit_check",
                   "error": f"unknown option {a}"})
             return 2
-        elif mode == "require":
-            requires.append(a)
-        elif mode == "order":
-            ordered.append(a)
         else:
             files.append(a)
         i += 1
