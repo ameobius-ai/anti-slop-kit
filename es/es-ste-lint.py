@@ -21,6 +21,23 @@ HEDGE = [
     "básicamente", "simplemente", "realmente", "actualmente",
 ]
 
+# Technical register (mirrors the ru allowlist from issue #33): standard
+# documentation nouns built on these stems are correct doc vocabulary,
+# not slop. Lowercase prefix match.
+TECHNICAL_STEMS = (
+    "configuraci", "instalaci", "conexi", "sesi", "gesti",
+    "documentaci", "funcionamiento", "autenticaci", "autorizaci",
+    "validaci", "ejecuci", "eliminaci", "actualizaci", "migraci",
+    "integraci", "almacenamiento", "procesamiento", "rendimiento",
+)
+
+
+def _technical(word):
+    """True if the (lowered) word is technical-register doc vocabulary."""
+    w = word.lower()
+    return any(w.startswith(stem) for stem in TECHNICAL_STEMS)
+
+
 def lint(text):
     words = len(text.split())
     v = {}
@@ -37,7 +54,9 @@ def lint(text):
     v["long_paragraph(>6s)"] = sum(1 for p in paragraphs if len(re.split(r'[.!?]+', p)) > 6)
     
     v["passive_voice"] = len(re.findall(r'\b(es|son|fue|fueron)\s+\w+(ado|ido|ada|ida)\b', text, re.I))
-    v["nominalization"] = len(re.findall(r'\b\w+(ción|miento|aje)\b', text, re.I))
+    v["nominalization"] = sum(
+        1 for m in re.finditer(r'\b\w+(ción|miento|aje)\b', text, re.I)
+        if not _technical(m.group(0)))
     
     total = sum(v.values())
     
