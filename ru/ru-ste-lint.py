@@ -661,13 +661,13 @@ def main(argv):
             explain = True
         elif a == "--format":
             i += 1
-            if i >= len(argv) or argv[i] not in ("text", "github"):
-                print("ERROR: --format needs text or github", file=sys.stderr)
+            if i >= len(argv) or argv[i] not in ("text", "github", "sarif"):
+                print("ERROR: --format needs text, github, or sarif", file=sys.stderr)
                 return 2
             fmt = argv[i]
         elif a.startswith("--format="):
             fmt = a.split("=", 1)[1]
-            if fmt not in ("text", "github"):
+            if fmt not in ("text", "github", "sarif"):
                 print(f"ERROR: unknown format {fmt}", file=sys.stderr)
                 return 2
         elif a == "--breakdown":
@@ -885,6 +885,7 @@ class CodeCommentAnalyzer:
             r'//\s*TODO\b',
             r'//\s*FIXME\b',
         ]
+        
         for i, line in enumerate(lines, 1):
             for pattern in todo_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
@@ -902,6 +903,7 @@ class CodeCommentAnalyzer:
             r'//\s*(эта\s+)?(функция|метод|цикл)\s+(делает|возвращает|проверяет)',
             r'//\s*(эта\s+)?(переменн|поле)\s+(содержит|хранит)',
         ]
+        
         for i, line in enumerate(lines, 1):
             for pattern in what_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
